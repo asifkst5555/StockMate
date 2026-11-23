@@ -27,11 +27,13 @@ const completeLogin = async (response, dispatch, navigate) => {
         Tokens.GET_PERMISSIONS,
         response.data.data.permissions
     );
+    const userImageUrl = response.data.data.user.image_url || "";
     localStorage.setItem(Tokens.USER, response.data.data.user.email);
-    localStorage.setItem(
-        Tokens.IMAGE,
-        response.data.data.user.image_url
-    );
+    localStorage.setItem(Tokens.IMAGE, userImageUrl);
+    localStorage.setItem(Tokens.USER_IMAGE_URL, userImageUrl);
+    localStorage.removeItem(Tokens.UPDATED_EMAIL);
+    localStorage.removeItem(Tokens.UPDATED_FIRST_NAME);
+    localStorage.removeItem(Tokens.UPDATED_LAST_NAME);
     localStorage.setItem(
         Tokens.FIRST_NAME,
         response.data.data.user.first_name

@@ -12,7 +12,7 @@ class UpdateUserProfileRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        return $this->user() !== null;
     }
 
     /**
@@ -20,14 +20,14 @@ class UpdateUserProfileRequest extends FormRequest
      */
     public function rules(): array
     {
-        $id = Auth::id();
+        $id = $this->user()?->id ?? Auth::id();
 
         return [
-            'first_name' => 'required',
-            'last_name' => 'required',
+            'first_name' => 'required|string|max:191',
+            'last_name' => 'required|string|max:191',
             'phone' => 'required|numeric',
             'email' => 'required|email|unique:users,email,'.$id,
-            'image' => 'image|mimes:jpg,jpeg,png,svg',
+            'image' => 'nullable|file|image|mimes:jpg,jpeg,png,webp|mimetypes:image/jpeg,image/png,image/webp|max:2048',
         ];
     }
 }

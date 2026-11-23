@@ -41,60 +41,41 @@ const UpdateProfile = () => {
         last_name: "",
         email: "",
         phone: "",
+        image: "",
     });
 
     const [isValidPhone, setIsValidPhone] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     const avtarName = getAvatarName(
-        userProfile &&
-            userProfile.attributes &&
-            userProfile.attributes.image === "" &&
-            userProfile.attributes.last_name &&
-            userProfile.attributes.first_name +
-                " " +
-                userProfile.attributes.last_name
+        `${profileValue.first_name || userProfile?.attributes?.first_name || ""} ${
+            profileValue.last_name || userProfile?.attributes?.last_name || ""
+        }`.trim()
     );
-    const newImg =
-        userProfile &&
-        userProfile.attributes &&
-        userProfile.attributes.image === null &&
-        avtarName;
-    const [imagePreviewUrl, setImagePreviewUrl] = useState(newImg && newImg);
+    const [imagePreviewUrl, setImagePreviewUrl] = useState("");
     const [selectImg, setSelectImg] = useState(null);
-    const disabled = selectImg
+    const disabled = isSaving
+        ? true
+        : selectImg
         ? false
         : userProfile.attributes &&
           userProfile.attributes.first_name === profileValue.first_name &&
           userProfile.attributes.last_name === profileValue.last_name &&
           userProfile.attributes.email === profileValue.email &&
           userProfile.attributes.phone === profileValue.phone &&
-          userProfile.attributes.image === profileValue.image;
+          (userProfile.attributes.image || "") === (profileValue.image || "");
 
     useEffect(() => {
-        if (userProfile) {
+        if (userProfile?.attributes) {
+            const attrs = userProfile.attributes;
             setProfileValue({
-                first_name: userProfile
-                    ? userProfile.attributes &&
-                      userProfile.attributes.first_name
-                    : "",
-                last_name: userProfile
-                    ? userProfile.attributes && userProfile.attributes.last_name
-                    : "",
-                email: userProfile
-                    ? userProfile.attributes && userProfile.attributes.email
-                    : "",
-                phone: userProfile
-                    ? userProfile.attributes && userProfile.attributes.phone
-                    : "",
-                image: userProfile
-                    ? userProfile.attributes && userProfile.attributes.image
-                    : "",
+                first_name: attrs.first_name || "",
+                last_name: attrs.last_name || "",
+                email: attrs.email || "",
+                phone: attrs.phone || "",
+                image: attrs.image || "",
             });
-            setImagePreviewUrl(
-                userProfile
-                    ? userProfile.attributes && userProfile.attributes.image
-                    : user
-            );
+            setImagePreviewUrl(attrs.image || "");
         }
     }, [userProfile]);
 
@@ -159,44 +140,72 @@ const UpdateProfile = () => {
         setErrors("");
     };
 
+    const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+    const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
+
     const handleImageChanges = (e) => {
-        if (e.target.files.length > 0) {
+        if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
-            if (
-                file.type === "image/jpeg" ||
-                file.type === "image/png" ||
-                file.type === "image/svg+xml"
-            ) {
-                setSelectImg(file);
-                const fileReader = new FileReader();
-                fileReader.onloadend = () => {
-                    setImagePreviewUrl(fileReader.result);
-                };
-                fileReader.readAsDataURL(file);
-                setErrors("");
+            if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+                setErrors((prev) => ({
+                    ...prev,
+                    image: "Please select a valid JPG, PNG, or WebP image.",
+                }));
+                e.target.value = "";
+                return;
             }
+            if (file.size > MAX_IMAGE_BYTES) {
+                setErrors((prev) => ({
+                    ...prev,
+                    image: "Profile image must be 2 MB or smaller.",
+                }));
+                e.target.value = "";
+                return;
+            }
+            setSelectImg(file);
+            const fileReader = new FileReader();
+            fileReader.onloadend = () => {
+                setImagePreviewUrl(fileReader.result);
+            };
+            fileReader.readAsDataURL(file);
+            setErrors((prev) => ({ ...prev, image: "" }));
         }
     };
 
-    const prepareFormData = (data) => {
+    const prepareFormData = (data, fileToUpload) => {
         const formData = new FormData();
         formData.append("first_name", data.first_name);
         formData.append("last_name", data.last_name);
         formData.append("email", data.email);
         formData.append("phone", data.phone);
-        if (selectImg) {
-            formData.append("image", data.image);
+        if (fileToUpload) {
+            formData.append("image", fileToUpload);
         }
         return formData;
     };
 
-    const onEdit = (event) => {
+    const onEdit = async (event) => {
         event.preventDefault();
         const Valid = handleValidation();
         if (!disabled && Valid) {
-            profileValue.image = selectImg;
-            setProfileValue(profileValue);
-            dispatch(updateProfile(prepareFormData(profileValue), navigate));
+            setIsSaving(true);
+            const result = await dispatch(
+                updateProfile(prepareFormData(profileValue, selectImg))
+            );
+            setIsSaving(false);
+            if (result?.success) {
+                setSelectImg(null);
+            } else {
+                // Preserve previous saved profile image if upload failed
+                setSelectImg(null);
+                setImagePreviewUrl(userProfile?.attributes?.image || "");
+                if (result?.errors?.image?.[0]) {
+                    setErrors((prev) => ({
+                        ...prev,
+                        image: result.errors.image[0],
+                    }));
+                }
+            }
         }
     };
 
@@ -215,8 +224,14 @@ const UpdateProfile = () => {
                                         imagePreviewUrl={imagePreviewUrl}
                                         user={user}
                                         avtarName={avtarName}
+                                        accept=".jpg, .jpeg, .png, .webp"
                                         handleImageChange={handleImageChanges}
                                     />
+                                    {errors["image"] ? (
+                                        <span className="text-danger d-block fw-400 fs-small mt-2">
+                                            {errors["image"]}
+                                        </span>
+                                    ) : null}
                                 </div>
                             </div>
                             <div className="col-md-6 mb-3">
@@ -334,16 +349,18 @@ const UpdateProfile = () => {
                             </div>
                             <div className="d-flex mt-5">
                                 {userProfile ? (
-                                    <div onClick={(event) => onEdit(event)}>
-                                        <input
-                                            className="btn btn-primary me-3"
-                                            type="submit"
-                                            value={placeholderText(
-                                                "globally.save-btn"
-                                            )}
-                                            disabled={disabled}
-                                        />
-                                    </div>
+                                    <button
+                                        type="submit"
+                                        onClick={(event) => onEdit(event)}
+                                        className="btn btn-primary me-3"
+                                        disabled={disabled}
+                                    >
+                                        {isSaving
+                                            ? "Saving..."
+                                            : placeholderText(
+                                                  "globally.save-btn"
+                                              )}
+                                    </button>
                                 ) : null}
                                 <Link
                                     to={

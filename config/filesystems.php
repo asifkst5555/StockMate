@@ -34,15 +34,15 @@ return [
 
         'local' => [
             'driver' => 'local',
-            'root' => public_path('uploads'),
-            'url' => env('APP_URL').'/uploads',
+            'root' => env('PUBLIC_PATH') ? rtrim(env('PUBLIC_PATH'), '/').'/uploads' : public_path('uploads'),
+            'url' => rtrim(env('APP_URL', ''), '/').'/uploads',
             'throw' => false,
         ],
 
         'public' => [
             'driver' => 'local',
-            'root' => public_path('uploads'),
-            'url' => env('APP_URL').'/uploads',
+            'root' => env('PUBLIC_PATH') ? rtrim(env('PUBLIC_PATH'), '/').'/uploads' : public_path('uploads'),
+            'url' => rtrim(env('APP_URL', ''), '/').'/uploads',
             'visibility' => 'public',
             'throw' => false,
         ],
@@ -101,7 +101,7 @@ return [
     */
 
     'links' => [
-        public_path('storage') => storage_path('app/public'),
+        (env('PUBLIC_PATH') ? rtrim(env('PUBLIC_PATH'), '/').'/storage' : public_path('storage')) => storage_path('app/public'),
     ],
 
 ];

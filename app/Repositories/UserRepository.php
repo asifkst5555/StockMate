@@ -8,9 +8,11 @@ use App\Models\Store;
 use App\Models\User;
 use App\Models\UserStore;
 use Exception;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -183,12 +185,29 @@ class UserRepository extends BaseRepository
             $user = Auth::user();
             $user->update($safeProfileData);
 
-            if ((! empty($input['image']))) {
-                $user->clearMediaCollection(User::PATH);
-                $user->media()->delete();
-                $user->addMedia($input['image'])->toMediaCollection(User::PATH, config('app.media_disc'));
+            if (! empty($input['image']) && $input['image'] instanceof UploadedFile && $input['image']->isValid()) {
+                $existingMedia = $user->getMedia(User::PATH);
+                $extension = strtolower($input['image']->guessExtension() ?: $input['image']->getClientOriginalExtension() ?: 'jpg');
+                if (! in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+                    $extension = 'jpg';
+                }
+                $safeFileName = 'avatar_' . $user->id . '_' . Str::uuid()->toString() . '.' . $extension;
+
+                $newMedia = $user->addMedia($input['image'])
+                    ->usingName('user_avatar_' . $user->id)
+                    ->usingFileName($safeFileName)
+                    ->toMediaCollection(User::PATH, config('app.media_disc'));
+
+                foreach ($existingMedia as $oldMedia) {
+                    if ($oldMedia->id !== $newMedia->id) {
+                        $oldMedia->delete();
+                    }
+                }
             }
             DB::commit();
+
+            $user->unsetRelation('media');
+            $user->load('media');
 
             return $user;
         } catch (\Exception $e) {

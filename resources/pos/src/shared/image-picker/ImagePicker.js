@@ -1,11 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { getFormattedMessage, placeholderText } from '../sharedMethod';
 import { faPencil } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
 const ImagePicker = (props) => {
-    const { imagePreviewUrl, handleImageChange, imageTitle, avtarName, user, required } = props;
+    const { imagePreviewUrl, handleImageChange, imageTitle, avtarName, user, required, accept } = props;
     let fileInput = React.createRef();
+    const [imgError, setImgError] = useState(false);
+
+    useEffect(() => {
+        setImgError(false);
+    }, [imagePreviewUrl]);
+
+    const showImage = Boolean(imagePreviewUrl && !imgError);
 
     return (
         <div className='col-12'>
@@ -16,14 +23,18 @@ const ImagePicker = (props) => {
                 <div
                     className='image-picker'>
                     <div
-                        className={`image previewImage imagePreviewUrl ${imagePreviewUrl ? null : "d-flex justify-content-center align-items-center"}`}>
-                        {imagePreviewUrl ?
-                            <img src={imagePreviewUrl ? imagePreviewUrl : null} alt='img' width={75}
-                                height={100} className='image image-circle image-mini h-100' />
+                        className={`image previewImage imagePreviewUrl ${showImage ? '' : "d-flex justify-content-center align-items-center"}`}>
+                        {showImage ?
+                            <img src={imagePreviewUrl} alt='img' width={75}
+                                height={100}
+                                style={{ objectFit: 'cover' }}
+                                onError={() => setImgError(true)}
+                                className='image image-circle image-mini h-100' />
                             : avtarName ?
                                 <span className='custom-user-avatar w-100 h-100'>{avtarName}</span>
                                 :
                                 <img src={user ? user : null} alt='img' width={75} height={75}
+                                    style={{ objectFit: 'cover' }}
                                     className='image image-circle image-mini h-100' />
                         }
                         <span
@@ -32,7 +43,7 @@ const ImagePicker = (props) => {
                                 className='upload-file'
                                 title={`${imageTitle ? imageTitle : placeholderText('globally.input.change-logo.tooltip')}`}
                                 type='file'
-                                accept='.png, .jpg, .jpeg, .svg'
+                                accept={accept || '.png, .jpg, .jpeg, .webp'}
                                 onChange={(e) => handleImageChange(e)}
                                 ref={fileInput}
                             />

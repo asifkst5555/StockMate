@@ -108,9 +108,17 @@ class User extends Authenticatable implements HasMedia, JsonResourceful, CanRese
 
     public function getImageUrlAttribute(): string
     {
-        /** @var Media $media */
-        $media = $this->getMedia(User::PATH)->first();
+        /** @var Media|null $media */
+        $media = $this->getMedia(User::PATH)->last();
         if (! empty($media)) {
+            $diskDriver = config("filesystems.disks.{$media->disk}.driver");
+            if ($diskDriver === 'local') {
+                $fullPath = $media->getPath();
+                if (! is_string($fullPath) || ! file_exists($fullPath)) {
+                    return '';
+                }
+            }
+
             return $media->getFullUrl();
         }
 

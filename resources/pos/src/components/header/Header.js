@@ -49,8 +49,23 @@ const Header = (props) => {
     const [storeWarningModal, setStoreWarningModal] = useState(false);
     const [subscriptionWarningModal, setSubscriptionWarningModal] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date())
-    const { allConfigData, loginUser } = useSelector(state => state);
+    const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+    const { allConfigData, loginUser, userProfile } = useSelector(state => state);
     const updatedLanguage = localStorage.getItem(Tokens.UPDATED_LANGUAGE);
+
+    const profileAttributes = userProfile?.attributes;
+    const avatarSrc = (profileAttributes && profileAttributes.image !== undefined)
+        ? (profileAttributes.image || '')
+        : (imageUrl || image || loginUser?.user?.image_url || '');
+
+    const displayFirstName = profileAttributes?.first_name || updatedFirstName || firstName || '';
+    const displayLastName = profileAttributes?.last_name || updatedLastName || lastName || '';
+    const displayFullName = `${displayFirstName} ${displayLastName}`.trim();
+    const displayEmail = profileAttributes?.email || updatedEmail || users || '';
+
+    useEffect(() => {
+        setAvatarLoadFailed(false);
+    }, [avatarSrc]);
 
     const onClickDeleteModel = () => {
         setDeleteModel(!deleteModel);
@@ -218,18 +233,20 @@ const Header = (props) => {
                         <Dropdown.Toggle className='hide-arrow bg-transparent border-0 p-0 d-flex align-items-center'
                             id='dropdown-basic'>
                             <div className='d-flex align-items-center justify-content-center'>
-                                {imageUrl || image ?
-                                    <Image src={imageUrl ? imageUrl : image || User}
+                                {avatarSrc && !avatarLoadFailed ?
+                                    <Image src={avatarSrc}
+                                        onError={() => setAvatarLoadFailed(true)}
                                         className='image image-circle image-tiny'
+                                        style={{ objectFit: 'cover' }}
                                         alt='user-avatar' height='50' width='50' />
                                     :
                                     <span className='custom-user-avatar'>
-                                        {getAvatarName(updatedFirstName && updatedLastName ? updatedFirstName + ' ' + updatedLastName : firstName + ' ' + lastName)}
+                                        {getAvatarName(displayFullName)}
                                     </span>
                                 }
                                 <span
                                     className='ms-2 text-gray-600 d-none d-sm-block'>
-                                    {updatedFirstName && updatedLastName ? <>{updatedFirstName + ' ' + updatedLastName}</> : <> {firstName + ' ' + lastName}</>}
+                                    {displayFullName}
                                 </span>
                             </div>
                             <FontAwesomeIcon icon={faAngleDown} className="text-gray-600 ms-2 d-none d-sm-block" />
@@ -238,20 +255,23 @@ const Header = (props) => {
                             <div className='text-center pb-1 border-bottom mb-4'>
                                 <div className='text-center text-decoration-none pb-5 w-100 align-items-center'>
                                     <div className='image image-circle w-100 image-tiny pb-5'>
-                                        {imageUrl || image ?
-                                            <img src={imageUrl ? imageUrl : image}
-                                                className='img-fluid' height='50' width='50' alt='user-avatar' /> :
+                                        {avatarSrc && !avatarLoadFailed ?
+                                            <img src={avatarSrc}
+                                                onError={() => setAvatarLoadFailed(true)}
+                                                className='img-fluid'
+                                                style={{ objectFit: 'cover' }}
+                                                height='50' width='50' alt='user-avatar' /> :
                                             <span className='user_avatar mx-auto'>
-                                                {getAvatarName(updatedFirstName && updatedLastName ? updatedFirstName + ' ' + updatedLastName : firstName + ' ' + lastName)}
+                                                {getAvatarName(displayFullName)}
                                             </span>
                                         }
                                     </div>
                                     <div className='d-flex flex-column'>
                                         <h3 className='text-gray-900'>
-                                            {updatedFirstName && updatedLastName ? <>{updatedFirstName + ' ' + updatedLastName}</> : <> {firstName + ' ' + lastName}</>}
+                                            {displayFullName}
                                         </h3>
                                         <h4 className='mb-0 fw-400 fs-6'>
-                                            {updatedEmail ? updatedEmail : users}
+                                            {displayEmail}
                                         </h4>
                                     </div>
                                 </div>

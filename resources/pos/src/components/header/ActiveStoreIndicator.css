@@ -1,0 +1,521 @@
+/* ==========================================================================
+   STOCKMATE DESIGN CONCEPT #1 — SIDEBAR BRANDING & TOP NAVBAR
+   ========================================================================== */
+
+/* Sidebar Clean White Header with Official Black Logo (no duplicate brand text) */
+.aside-menu-container__aside-logo.sm-sidebar-header-wrap,
+.sm-sidebar-header-wrap {
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 68px;
+    width: 100%;
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    border-bottom: 1px solid #f1f5f9;
+    background-color: #ffffff;
+}
+
+.sm-sidebar-brand-bar {
+    width: 100%;
+    height: 70px;
+    background-color: #ffffff;
+    padding: 4px 12px 4px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-sizing: border-box;
+}
+
+.sm-sidebar-brand-link {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.sm-sidebar-brand-logo {
+    width: 202px;
+    max-width: 100%;
+    height: auto;
+    max-height: 64px;
+    object-fit: contain;
+    object-position: left center;
+    display: block;
+}
+
+.sm-sidebar-collapse-btn {
+    position: static !important;
+    margin-left: auto !important;
+    flex: 0 0 36px;
+    flex-shrink: 0;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    color: #475569 !important;
+    transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.pro-sidebar.collapsed .sm-sidebar-brand-bar {
+    justify-content: center;
+    padding: 6px 8px;
+}
+
+.pro-sidebar.collapsed .sm-sidebar-collapse-btn {
+    margin-left: 0 !important;
+}
+
+.sm-sidebar-collapse-btn:hover {
+    background-color: #f1f5f9;
+    color: #092b48 !important;
+}
+
+.sm-sidebar-collapse-icon {
+    font-size: 16px;
+    color: inherit;
+}
+
+.sm-sidebar-store-bar {
+    padding: 10px 12px 8px;
+    background-color: #ffffff;
+}
+
+/* Main Top Navbar Layout */
+.sm-top-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    box-shadow: 0 1px 4px rgba(9, 43, 72, 0.04);
+    min-height: 68px;
+}
+
+.sm-top-header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+}
+
+.sm-header-left {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+.sm-nav-divider {
+    display: inline-block;
+    width: 1px;
+    height: 26px;
+    background-color: #e2e8f0;
+    flex: 0 0 1px;
+}
+
+/* Active Store / Branch Selector */
+.sm-active-store-slot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 8px;
+}
+
+.sm-active-store-dropdown {
+    max-width: 100%;
+}
+
+.sm-active-store-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 420px;
+    padding: 6px 12px 6px 8px;
+    background-color: #fffbf7;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.sm-active-store-btn::after {
+    display: none !important;
+}
+
+.sm-active-store-btn:hover:not(:disabled),
+.sm-active-store-dropdown.show .sm-active-store-btn {
+    border-color: #f47716;
+    background-color: #fff7ed;
+    box-shadow: 0 2px 8px rgba(244, 119, 22, 0.12);
+}
+
+.sm-active-store-btn:focus-visible {
+    outline: none;
+    border-color: #f47716;
+    box-shadow: 0 0 0 3px rgba(244, 119, 22, 0.16);
+}
+
+.sm-active-store-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.sm-active-store-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    border-radius: 8px;
+    background-color: #fff1e6;
+    border: 1px solid #ffd8bd;
+    color: #f47716;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.sm-active-store-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
+    line-height: 1.2;
+}
+
+.sm-active-store-name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #092b48;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sm-active-store-sub {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #64748b;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sm-active-store-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    margin-left: 4px;
+}
+
+.sm-active-store-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background-color: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #047857;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.sm-active-store-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #10b981;
+    flex: 0 0 6px;
+}
+
+.sm-active-store-chevron {
+    font-size: 11px;
+    color: #64748b;
+    transition: transform 0.16s ease;
+}
+
+.sm-active-store-dropdown.show .sm-active-store-chevron {
+    transform: rotate(180deg);
+    color: #f47716;
+}
+
+/* Store Dropdown Menu */
+.sm-active-store-menu {
+    min-width: 280px;
+    max-width: 360px;
+    padding: 6px;
+    margin-top: 8px !important;
+    border-radius: 12px !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 14px 32px rgba(9, 43, 72, 0.12) !important;
+    background-color: #ffffff !important;
+}
+
+.sm-active-store-menu-head {
+    padding: 6px 10px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 4px;
+}
+
+.sm-active-store-option {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 10px !important;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    text-align: left;
+    white-space: normal !important;
+    transition: background-color 0.14s ease;
+}
+
+.sm-active-store-option:hover:not(:disabled) {
+    background-color: #f8fafc !important;
+}
+
+.sm-active-store-option.is-active {
+    background-color: #fff7ed !important;
+}
+
+.sm-active-store-option-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.sm-active-store-option-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #092b48;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.sm-active-store-option-branch {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #64748b;
+    margin-top: 2px;
+    line-height: 1.25;
+}
+
+.sm-active-store-option-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background-color: #ecfdf5;
+    color: #047857;
+    font-size: 10.5px;
+    font-weight: 600;
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+/* Right-Side Header Utility Controls (Date, Time, POS, Fullscreen, Bell, Profile) */
+.sm-header-right-nav {
+    flex: 0 0 auto;
+}
+
+.sm-header-utility-list {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 10px;
+}
+
+.sm-header-date-item,
+.sm-header-time-item {
+    gap: 7px;
+    white-space: nowrap;
+}
+
+.sm-header-meta-icon {
+    font-size: 13px;
+    color: #f47716;
+}
+
+.sm-header-date-text {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #475569;
+}
+
+.sm-header-time-text {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #092b48;
+}
+
+.sm-header-icon-wrap {
+    align-items: center;
+}
+
+.sm-header-icon-btn {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    border: 1px solid #e2e8f0;
+    background-color: #f8fafc;
+    color: #092b48;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.sm-header-icon-btn::after {
+    display: none !important;
+}
+
+.sm-header-icon-btn:hover {
+    border-color: #f47716;
+    background-color: #fff7ed;
+    color: #f47716;
+}
+
+.sm-bell-dot {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: #f47716;
+    border: 1.5px solid #ffffff;
+}
+
+.sm-notif-menu {
+    min-width: 220px;
+    padding: 6px;
+    margin-top: 8px !important;
+    border-radius: 12px !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 12px 28px rgba(9, 43, 72, 0.12) !important;
+}
+
+.sm-notif-head {
+    padding: 6px 10px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 4px;
+}
+
+.sm-notif-item {
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #092b48 !important;
+    padding: 8px 10px !important;
+}
+
+.sm-notif-item:hover {
+    background-color: #fff7ed !important;
+    color: #f47716 !important;
+}
+
+/* Tablet (768px - 1199px) */
+@media (max-width: 1199.98px) {
+    .sm-active-store-slot {
+        padding: 0 6px;
+    }
+
+    .sm-active-store-btn {
+        max-width: 260px;
+        padding: 5px 10px 5px 7px;
+        gap: 8px;
+    }
+
+    .sm-active-store-icon {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+        font-size: 13px;
+    }
+
+    .sm-active-store-name {
+        font-size: 12.5px;
+    }
+
+    .sm-active-store-sub {
+        font-size: 11px;
+    }
+
+    .sm-active-store-pill {
+        display: none;
+    }
+
+    .sm-header-utility-list {
+        gap: 8px;
+        margin-right: 8px;
+    }
+}
+
+/* Mobile (< 768px) */
+@media (max-width: 767.98px) {
+    .sm-active-store-slot {
+        padding: 0 4px;
+        flex: 0 1 auto;
+    }
+
+    .sm-active-store-btn {
+        max-width: 146px;
+        padding: 5px 8px 5px 6px;
+        gap: 6px;
+    }
+
+    .sm-active-store-icon {
+        width: 26px;
+        height: 26px;
+        flex: 0 0 26px;
+        font-size: 12px;
+        border-radius: 6px;
+    }
+
+    .sm-active-store-name {
+        font-size: 12px;
+    }
+
+    .sm-active-store-sub,
+    .sm-active-store-pill {
+        display: none;
+    }
+
+    .sm-active-store-menu {
+        min-width: 240px;
+        max-width: calc(100vw - 24px);
+    }
+
+    .sm-header-utility-list {
+        gap: 6px;
+        margin-right: 6px;
+    }
+}

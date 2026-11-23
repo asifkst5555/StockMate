@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { connect } from "react-redux";
 import AsideDefault from "./sidebar/asideDefault";
 import Header from "./header/Header";
+import ActiveStoreIndicator from "./header/ActiveStoreIndicator";
 import Footer from "./footer/Footer";
 import AsideTopSubMenuItem from "./sidebar/asideTopSubMenuItem";
 import { ROLES, Tokens } from "../constants";
@@ -56,25 +57,28 @@ const MasterLayout = (props) => {
                     isMenuCollapse === true ? "wrapper-res" : "wrapper"
                 } d-flex flex-column flex-row-fluid`}
             >
-                <div className="d-flex align-items-stretch justify-content-between header">
-                    <div className="container-fluid d-flex align-items-stretch justify-content-xxl-between flex-grow-1">
-                        <button
-                            type="button"
-                            className="btn d-flex align-items-center d-xl-none px-0"
-                            title="Show aside menu"
-                            onClick={menuClick}
-                        >
-                            <FontAwesomeIcon icon={faBars} className="fs-1" />
-                        </button>
-                        <AsideTopSubMenuItem
-                            asideConfig={
-                                loginUser.roles === ROLES.SUPER_ADMIN
-                                    ? adminMenu
-                                    : userMenu
-                            }
-                            isMenuCollapse={isMenuCollapse}
-                            isAdmin={loginUser.roles === ROLES.SUPER_ADMIN}
-                        />
+                <div className="d-flex align-items-stretch justify-content-between header sm-top-header">
+                    <div className="container-fluid d-flex align-items-center justify-content-between flex-grow-1 sm-top-header-inner">
+                        <div className="sm-header-left">
+                            <button
+                                type="button"
+                                className="btn d-flex align-items-center d-xl-none px-0 me-2"
+                                title="Show aside menu"
+                                onClick={menuClick}
+                            >
+                                <FontAwesomeIcon icon={faBars} className="fs-1" />
+                            </button>
+                            <AsideTopSubMenuItem
+                                asideConfig={
+                                    loginUser.roles === ROLES.SUPER_ADMIN
+                                        ? adminMenu
+                                        : userMenu
+                                }
+                                isMenuCollapse={isMenuCollapse}
+                                isAdmin={loginUser.roles === ROLES.SUPER_ADMIN}
+                            />
+                        </div>
+                        <ActiveStoreIndicator />
                         <Header newRoutes={newRoutes} />
                     </div>
                 </div>

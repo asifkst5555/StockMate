@@ -18,7 +18,10 @@ import {
     faRightFromBracket,
     faAngleDown,
     faLanguage,
-    faMoneyBill
+    faMoneyBill,
+    faCalendarAlt,
+    faBell,
+    faClock
 } from '@fortawesome/free-solid-svg-icons';
 import { Dropdown } from "react-bootstrap";
 import { productQuantityReportAction } from '../../store/action/paymentQuantityReport';
@@ -79,9 +82,9 @@ const Header = (props) => {
 
     const formatDate = (date) => {
         return date.toLocaleDateString(updatedLanguage == 'gr' ? "de" : updatedLanguage === 'sp' ? "ES" : updatedLanguage === 'cn' ? "zh" : updatedLanguage, {
-            weekday: 'long',
+            weekday: 'short',
             year: 'numeric',
-            month: 'long',
+            month: 'short',
             day: 'numeric'
         })
     }
@@ -123,47 +126,93 @@ const Header = (props) => {
     }
 
     return (
-        <Navbar collapseOnSelect expand='lg' className='align-items-stretch ms-auto py-1'>
-            <div className='d-flex align-items-stretch justify-content-center'>
-                <Nav className='align-items-stretch justify-content-between flex-row'>
-                    <ul className='nav align-items-center flex-nowrap'>
-                        <li className="px-sm-3 px-2 d-flex align-items-center">
-                            <div className="text-end">
-                                <div className="text-primary fw-bolder fs-5">
-                                    {formatTime(currentTime)}
-                                </div>
-                                <div className="fs-6">
-                                    {formatDate(currentTime)}
-                                </div>
-                            </div>
+        <Navbar collapseOnSelect expand='lg' className='align-items-center ms-auto py-1 sm-header-right-nav'>
+            <div className='d-flex align-items-center justify-content-end'>
+                <Nav className='align-items-center justify-content-between flex-row sm-header-controls'>
+                    <ul className='nav align-items-center flex-nowrap sm-header-utility-list'>
+                        <li className="sm-nav-divider d-none d-xxl-block" aria-hidden="true" />
+                        <li className="sm-header-date-item d-none d-xxl-flex align-items-center">
+                            <FontAwesomeIcon icon={faCalendarAlt} className="sm-header-meta-icon" />
+                            <span className="sm-header-date-text">{formatDate(currentTime)}</span>
                         </li>
-                        <li>
+                        <li className="sm-nav-divider d-none d-lg-block" aria-hidden="true" />
+                        <li className="sm-header-time-item d-none d-lg-flex align-items-center">
+                            <FontAwesomeIcon icon={faClock} className="sm-header-meta-icon" />
+                            <span className="sm-header-time-text">{formatTime(currentTime)}</span>
+                        </li>
+                        <li className="sm-header-pos-item">
                             {loginUser?.roles != ROLES.SUPER_ADMIN && newRoutes.map((route) => route.permission).filter(routeName => routeName === 'manage_pos_screen')[0] === 'manage_pos_screen'
                                 ?
                                 allConfigData?.open_register === true
                                     ?
                                     <button onClick={handleClickPOSBtn}
-                                        className='px-sm-3 px-2 d-flex text-decoration-none pos-button pos-button-highlight'>
+                                        className='px-sm-3 px-2 d-flex text-decoration-none pos-button pos-button-highlight sm-pos-btn'>
                                         {getFormattedMessage('header.pos.title')}
                                     </button>
                                     :
                                     <Link to='/app/user/pos'
-                                        className='px-sm-3 px-2 d-flex text-decoration-none pos-button pos-button-highlight'>
+                                        className='px-sm-3 px-2 d-flex text-decoration-none pos-button pos-button-highlight sm-pos-btn'>
                                         {getFormattedMessage('header.pos.title')}
                                     </Link>
                                 :
                                 ''
                             }
                         </li>
-                        {isFullscreen === true ?
-                            <li className="px-sm-3 px-2 cursor-pointer" onClick={() => fullScreen()}>
-                                <FontAwesomeIcon icon={faMinimize} className='text-primary fs-2' />
-                            </li>
-                            :
-                            <li className="px-sm-3 px-2 cursor-pointer" onClick={() => fullScreen()}>
-                                <FontAwesomeIcon icon={faMaximize} className='text-primary fs-2' />
-                            </li>
-                        }
+                        <li className="sm-header-icon-wrap d-none d-md-flex">
+                            <button
+                                type="button"
+                                className="sm-header-icon-btn"
+                                onClick={() => fullScreen()}
+                                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                                aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                            >
+                                <FontAwesomeIcon icon={isFullscreen ? faMinimize : faMaximize} />
+                            </button>
+                        </li>
+                        <li className="sm-header-icon-wrap d-none d-sm-flex">
+                            <Dropdown align="end">
+                                <Dropdown.Toggle
+                                    as="button"
+                                    type="button"
+                                    id="sm-notifications-toggle"
+                                    className="sm-header-icon-btn sm-bell-btn"
+                                    title="Notifications"
+                                    aria-label="Notifications"
+                                >
+                                    <FontAwesomeIcon icon={faBell} />
+                                    <span className="sm-bell-dot" aria-hidden="true" />
+                                </Dropdown.Toggle>
+                                <Dropdown.Menu className="sm-notif-menu">
+                                    <div className="sm-notif-head">Notifications</div>
+                                    {loginUser?.roles !== ROLES.SUPER_ADMIN ? (
+                                        <>
+                                            <Dropdown.Item
+                                                as={Link}
+                                                to="/app/user/report/report-product-quantity-alert"
+                                                className="sm-notif-item"
+                                            >
+                                                View Low Stock Alerts
+                                            </Dropdown.Item>
+                                            <Dropdown.Item
+                                                as={Link}
+                                                to="/app/user/sales"
+                                                className="sm-notif-item"
+                                            >
+                                                View Recent Sales
+                                            </Dropdown.Item>
+                                        </>
+                                    ) : (
+                                        <Dropdown.Item
+                                            as={Link}
+                                            to="/app/admin/dashboard"
+                                            className="sm-notif-item"
+                                        >
+                                            System Overview
+                                        </Dropdown.Item>
+                                    )}
+                                </Dropdown.Menu>
+                            </Dropdown>
+                        </li>
                     </ul>
                     <Dropdown className='d-flex align-items-stretch'>
                         <Dropdown.Toggle className='hide-arrow bg-transparent border-0 p-0 d-flex align-items-center'

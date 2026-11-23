@@ -45,7 +45,7 @@ function getAppLogoUrl(): string
         $appLogo = SadminSetting::where('key', 'app_logo')->first();
     }
 
-    return $appLogo->value ?? asset('images/logo/stockmate-logo.webp');
+    return $appLogo->value ?? asset('images/logo/logo-black.webp');
 }
 
 function getAppFaviconUrl(): string

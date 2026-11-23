@@ -143,7 +143,7 @@ const Login = () => {
     };
 
     const logoSrc =
-        frontCms?.value?.app_logo || "/images/logo/stockmate-logo.webp";
+        frontCms?.value?.app_logo || "/images/logo/logo-black.webp";
 
     const weeklyBars = [
         { day: "Mon", height: "44%", tone: "" },

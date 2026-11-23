@@ -62,6 +62,6 @@ class Setting extends Model implements HasMedia
             return $media->getFullUrl();
         }
 
-        return asset('images/logo/stockmate-logo.webp');
+        return asset('images/logo/logo-black.webp');
     }
 }

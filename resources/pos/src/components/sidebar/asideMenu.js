@@ -237,93 +237,74 @@ const AsideMenu = (props) => {
                     isResponsiveMenu === true ? "open-menu" : "hide-menu"
                 } aside-menu-container`}
             >
-                <SidebarHeader className="aside-menu-container__aside-logo flex-column-auto pb-2 pt-3">
-                    {loginUser?.roles != ROLES.SUPER_ADMIN ?
-                        <DropdownButton
-                            id="store-dropdown"
-                            title={
-                                <div className="d-flex align-items-center gap-2">
-                                    <FontAwesomeIcon icon={faStore} className="fs-1 text-primary" />
-                                    <div className="d-flex flex-column">
-                                        <span className="text-muted small text-start">{getFormattedMessage("store.header.name.title")}</span>
-                                        <span className="fw-semibold text-primary text-truncate store-name text-start">
-                                            {selectedStore ? selectedStore?.attributes?.name : ""}
-                                        </span>
-                                    </div>
-                                    <FontAwesomeIcon icon={faAngleDown} className="fs-4 text-secondary px-2" />
-                                </div>
-                            }
-                            variant=""
-                            className={`${
-                            isMenuCollapse
-                                ? "d-none"
-                                : "py-0 m-2 store-dropdown rounded text-center fw-semibold"
-                            }`}
-                        >
-                        {stores
-                            .filter((store) => store.attributes.status == 1)
-                            .map((store, index) => (
-                                <Dropdown.Item
-                                    key={index}
-                                    onClick={() => handleStore(store)}
-                                    className="py-1 px-4 fs-6 d-flex align-items-center gap-3"
-                                    active={false}
-                                >
-                                <input
-                                    type="radio"
-                                    name="store"
-                                    checked={selectedStore?.id == store.id}
-                                    onChange={() => handleStore(store)}
-                                />
-                                <span className={`mb-0 ${selectedStore?.id == store.id ? 'text-primary fw-semibold' : ''}`}>{store.attributes.name}</span>
-                                </Dropdown.Item>
-                            ))}
-                        </DropdownButton>
-                        : 
-                        <a
-                            href="/"
-                            className="text-decoration-none sidebar-logo text-gray-900 fs-4"
-                        >
-                            <div
-                                className={`${
-                                    isMenuCollapse
-                                        ? "d-none"
-                                        : "image image-mini me-3"
-                                }`}
+                <SidebarHeader className="aside-menu-container__aside-logo flex-column-auto sm-sidebar-header-wrap">
+                    <div className="sm-sidebar-brand-bar">
+                        {!isMenuCollapse && (
+                            <a
+                                href="/"
+                                className="sm-sidebar-brand-link"
+                                aria-label="StockMate"
                             >
                                 <img
-                                    src={
-                                        frontSetting.value &&
-                                        frontSetting.value.app_logo
-                                    }
-                                    className="img-fluid object-fit-contain"
-                                    alt="logo"
-                                    lazy="loading"
+                                    src="/images/logo/logo-black.webp"
+                                    className="sm-sidebar-brand-logo"
+                                    alt="StockMate"
                                 />
-                            </div>
+                            </a>
+                        )}
+                        <button
+                            type="button"
+                            onClick={(e) => menuIconClick(e)}
+                            className="btn p-0 fs-1 aside-menu-container__aside-menubar d-lg-block d-none sidebar-btn border-0 sm-sidebar-collapse-btn"
+                            aria-label="Toggle sidebar"
+                        >
+                            <FontAwesomeIcon
+                                icon={faBars}
+                                className="sm-sidebar-collapse-icon"
+                            />
+                        </button>
+                    </div>
 
-                            {isMenuCollapse
-                                ? null
-                                : frontSetting.value &&
-                                (frontSetting.value.show_app_name_in_sidebar ===
-                                    "1" ||
-                                    frontSetting.value
-                                        .show_app_name_in_sidebar === "true")
-                                ? frontSetting.value.app_name
-                                : ""}
-                        </a>
-                    }
-                    
-                    <button
-                        type="button"
-                        onClick={(e) => menuIconClick(e)}
-                        className="btn p-0 fs-1 aside-menu-container__aside-menubar d-lg-block d-none sidebar-btn border-0"
-                    >
-                        <FontAwesomeIcon
-                            icon={faBars}
-                            className="text-gray-600"
-                        />
-                    </button>
+                    {loginUser?.roles != ROLES.SUPER_ADMIN && !isMenuCollapse && (
+                        <div className="sm-sidebar-store-bar">
+                            <DropdownButton
+                                id="store-dropdown"
+                                title={
+                                    <div className="d-flex align-items-center gap-2">
+                                        <FontAwesomeIcon icon={faStore} className="fs-1 text-primary" />
+                                        <div className="d-flex flex-column">
+                                            <span className="text-muted small text-start">{getFormattedMessage("store.header.name.title")}</span>
+                                            <span className="fw-semibold text-primary text-truncate store-name text-start">
+                                                {selectedStore ? selectedStore?.attributes?.name : ""}
+                                            </span>
+                                        </div>
+                                        <FontAwesomeIcon icon={faAngleDown} className="fs-4 text-secondary px-2" />
+                                    </div>
+                                }
+                                variant=""
+                                className="py-0 m-0 store-dropdown rounded text-center fw-semibold w-100"
+                            >
+                                {stores
+                                    .filter((store) => store.attributes.status == 1)
+                                    .map((store, index) => (
+                                        <Dropdown.Item
+                                            key={index}
+                                            onClick={() => handleStore(store)}
+                                            className="py-1 px-4 fs-6 d-flex align-items-center gap-3"
+                                            active={false}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="store"
+                                                checked={selectedStore?.id == store.id}
+                                                onChange={() => handleStore(store)}
+                                            />
+                                            <span className={`mb-0 ${selectedStore?.id == store.id ? 'text-primary fw-semibold' : ''}`}>{store.attributes.name}</span>
+                                        </Dropdown.Item>
+                                    ))}
+                            </DropdownButton>
+                        </div>
+                    )}
                 </SidebarHeader>
                 <SidebarContent className="sidebar-scrolling">
                     <div

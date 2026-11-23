@@ -5,8 +5,8 @@
             <div>
                 <div class="lg:max-w-60 w-full">
                     <a href="{{ route('home') }}"
-                        class="w-full max-w-[195px] max-h-[53px] h-screen mb-[15px] block mx-auto sm:mx-0">
-                        <img src="{{ getAppLogoUrl() }}" alt="StockMate" class="xl:h-[60px] xl:object-fit-contain" />
+                        class="inline-flex items-center mb-[15px] mx-auto sm:mx-0">
+                        <img src="{{ asset('images/logo/logo-white.webp') }}" alt="StockMate" class="h-11 xl:h-[48px] w-auto object-contain" />
                     </a>
                 </div>
             </div>

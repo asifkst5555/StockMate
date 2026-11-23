@@ -1,0 +1,60 @@
+/node_modules
+/vendor
+/public/hot
+/public/storage
+/storage/*.key
+
+# Environment & Secrets (NEVER commit secrets)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+FRESHMART_DEMO_CREDENTIALS_LOCAL.md
+
+# Database dumps & backups
+*.sql
+*.sql.gz
+*.sqlite
+*.sqlite3
+
+# Runtime logs, caches & generated artifacts
+/storage/logs/*.log
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/fonts/*.ttf
+/.phpunit.cache
+npm-debug.log
+yarn-error.log
+.DS_Store
+
+# IDE & local overrides
+/.idea
+/.vscode
+docker-compose.override.yml
+Homestead.json
+Homestead.yaml
+
+# Runtime generated barcodes (exclude runtime output, keep all curated demo & branding uploads)
+/public/uploads/sales/*
+/public/uploads/product_barcode/*
+
+# Explicitly track all required NorthStar Market USA, FreshMart & StockMate media and compiled frontend assets
+!/public/uploads/northstar/**
+!/public/uploads/freshmart/**
+!/public/uploads/feature_image/**
+!/public/uploads/partner_img/**
+!/public/uploads/service_icon/**
+!/public/uploads/step_image/**
+!/public/uploads/testimonial_image/**
+!/public/uploads/why_choose_image/**
+!/public/images/**
+!/public/js/**
+!/public/css/**
+!/public/fonts/**
+!/public/assets/**
+!/public/mix-manifest.json
+!/public/barcode-images
+!/public/import_demo_files

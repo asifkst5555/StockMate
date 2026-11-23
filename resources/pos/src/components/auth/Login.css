@@ -1,0 +1,919 @@
+/* StockMate Premium Login Page V2 — Scoped strictly to .sm-login-page */
+
+.sm-login-page,
+.sm-login-page * {
+    box-sizing: border-box;
+}
+
+.sm-login-page {
+    min-height: 100vh;
+    width: 100%;
+    max-width: 100vw;
+    display: flex;
+    background-color: #F8FAFC;
+    color: #17212B;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Top-Right Language Selector (Scoped strictly to login page) */
+.sm-login-lang {
+    position: absolute;
+    top: 24px;
+    right: 28px;
+    z-index: 25;
+}
+
+.sm-login-page .languague-dropdown {
+    position: static !important;
+    margin: 0 !important;
+}
+
+.sm-login-page .languague-dropdown > .btn,
+.sm-login-page .languague-dropdown > .dropdown-toggle {
+    background-color: #FFFFFF !important;
+    color: #092B48 !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 10px !important;
+    padding: 8px 14px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 2px 8px rgba(9, 43, 72, 0.04) !important;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease !important;
+}
+
+.sm-login-page .languague-dropdown > .btn:hover,
+.sm-login-page .languague-dropdown > .btn:focus,
+.sm-login-page .languague-dropdown > .btn:active,
+.sm-login-page .languague-dropdown.show > .btn {
+    background-color: #FFFFFF !important;
+    border-color: #F47716 !important;
+    color: #F47716 !important;
+    box-shadow: 0 0 0 3px rgba(244, 119, 22, 0.12) !important;
+}
+
+.sm-login-page .languague-dropdown .dropdown-menu {
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 14px 32px rgba(9, 43, 72, 0.11) !important;
+    padding: 6px !important;
+    min-width: 156px !important;
+    margin-top: 6px !important;
+}
+
+.sm-login-page .languague-dropdown .dropdown-item {
+    border-radius: 8px !important;
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+    color: #17212B !important;
+    padding: 8px 12px !important;
+}
+
+.sm-login-page .languague-dropdown .dropdown-item:hover {
+    background-color: #FFF7ED !important;
+    color: #092B48 !important;
+}
+
+.sm-login-page .languague-dropdown .dropdown-item.active,
+.sm-login-page .languague-dropdown .dropdown-item:active {
+    background-color: #F47716 !important;
+    color: #FFFFFF !important;
+}
+
+/* =========================================================
+   LEFT COLUMN (52%) — BRAND & PRODUCT EXPERIENCE
+   ========================================================= */
+.sm-login-brand {
+    flex: 0 0 52%;
+    width: 52%;
+    min-height: 100vh;
+    background: linear-gradient(160deg, #FFFFFF 0%, #FFF8F1 55%, #F8FAFC 100%);
+    border-right: 1px solid #E2E8F0;
+    padding: 40px 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.sm-login-brand-inner {
+    width: 100%;
+    max-width: 660px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
+.sm-brand-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sm-brand-logo-link {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.sm-brand-logo-img {
+    width: 172px;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+
+.sm-brand-pill {
+    font-size: 12px;
+    font-weight: 600;
+    color: #092B48;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 999px;
+    padding: 5px 12px;
+    letter-spacing: 0.01em;
+}
+
+.sm-brand-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sm-brand-headline {
+    font-size: 38px;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    color: #092B48;
+    margin: 0;
+}
+
+.sm-brand-headline span {
+    color: #F47716;
+}
+
+.sm-brand-subtitle {
+    font-size: 15.5px;
+    line-height: 1.55;
+    color: #64748B;
+    margin: 0;
+    max-width: 560px;
+}
+
+/* Realistic Product Dashboard Preview */
+.sm-preview-shell {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 18px;
+    box-shadow: 0 20px 44px rgba(9, 43, 72, 0.09);
+    overflow: hidden;
+}
+
+.sm-preview-topbar {
+    background: #092B48;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sm-preview-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sm-preview-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.sm-preview-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.sm-preview-dots span:first-child {
+    background: #F47716;
+}
+
+.sm-preview-title {
+    color: #FFFFFF;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.sm-preview-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(244, 119, 22, 0.18);
+    color: #FF8A00;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+.sm-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #FF8A00;
+}
+
+.sm-preview-content {
+    display: grid;
+    grid-template-columns: 112px 1fr;
+}
+
+.sm-preview-sidebar {
+    background: #F8FAFC;
+    border-right: 1px solid #E2E8F0;
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sm-nav-pill {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #64748B;
+    padding: 7px 10px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.sm-nav-pill.active {
+    background: #092B48;
+    color: #FFFFFF;
+}
+
+.sm-nav-pill.active svg {
+    color: #FF8A00;
+}
+
+.sm-preview-main {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* KPI Row */
+.sm-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.sm-kpi-card {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 11px;
+    padding: 10px 12px;
+}
+
+.sm-kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748B;
+    margin-bottom: 4px;
+}
+
+.sm-kpi-value {
+    font-size: 17px;
+    font-weight: 700;
+    color: #092B48;
+    line-height: 1.2;
+}
+
+.sm-kpi-meta {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #F47716;
+}
+
+.sm-kpi-meta.muted {
+    color: #64748B;
+    font-weight: 500;
+}
+
+/* Lower Split: Chart + Live POS/Stock */
+.sm-preview-lower {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 12px;
+}
+
+.sm-subpanel {
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 12px;
+    background: #FFFFFF;
+}
+
+.sm-subpanel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.sm-subpanel-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #092B48;
+}
+
+.sm-subpanel-tag {
+    font-size: 11px;
+    font-weight: 600;
+    color: #F47716;
+}
+
+.sm-bars-wrap {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 7px;
+    height: 78px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #E2E8F0;
+}
+
+.sm-bar-col {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+}
+
+.sm-bar-fill {
+    width: 100%;
+    border-radius: 5px 5px 2px 2px;
+    background: #E2E8F0;
+}
+
+.sm-bar-fill.navy {
+    background: #092B48;
+}
+
+.sm-bar-fill.orange {
+    background: linear-gradient(180deg, #FF8A00 0%, #F47716 100%);
+}
+
+.sm-bar-day {
+    font-size: 10px;
+    color: #64748B;
+    font-weight: 500;
+}
+
+.sm-chart-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    font-size: 11px;
+    color: #64748B;
+}
+
+.sm-chart-summary strong {
+    color: #092B48;
+    font-weight: 700;
+}
+
+/* POS Activity & Stock Levels */
+.sm-activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sm-activity-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11.5px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.sm-activity-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.sm-activity-name {
+    font-weight: 600;
+    color: #17212B;
+}
+
+.sm-activity-sub {
+    font-size: 10.5px;
+    color: #64748B;
+}
+
+.sm-activity-amt {
+    font-weight: 700;
+    color: #092B48;
+    text-align: right;
+}
+
+.sm-stock-bar-bg {
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: #E2E8F0;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+.sm-stock-bar-fill {
+    height: 100%;
+    width: 82%;
+    background: linear-gradient(90deg, #092B48 0%, #F47716 100%);
+    border-radius: 999px;
+}
+
+/* Bottom 3 Feature Cards */
+.sm-feature-list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.sm-feature-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 12px 13px;
+    min-height: 58px;
+    box-shadow: 0 4px 12px rgba(9, 43, 72, 0.03);
+}
+
+.sm-feature-icon {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 9px;
+    background: #FFF3E6;
+    color: #F47716;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.sm-feature-text {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #092B48;
+    line-height: 1.3;
+}
+
+/* =========================================================
+   RIGHT COLUMN (48%) — AUTHENTICATION PANEL
+   ========================================================= */
+.sm-login-panel {
+    flex: 0 0 48%;
+    width: 48%;
+    min-height: 100vh;
+    background-color: #F8FAFC;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 76px 36px 40px;
+    position: relative;
+}
+
+.sm-mobile-brand {
+    display: none;
+    text-align: center;
+    margin-bottom: 22px;
+}
+
+.sm-mobile-brand img {
+    width: 152px;
+    height: auto;
+    object-fit: contain;
+    margin-bottom: 8px;
+}
+
+.sm-mobile-brand p {
+    font-size: 13.5px;
+    color: #64748B;
+    margin: 0;
+}
+
+.sm-login-card {
+    width: 100%;
+    max-width: 472px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 20px;
+    box-shadow: 0 18px 44px rgba(9, 43, 72, 0.07);
+    padding: 42px 40px;
+}
+
+.sm-card-heading {
+    font-size: 28px;
+    font-weight: 700;
+    color: #092B48;
+    letter-spacing: -0.024em;
+    margin: 0 0 8px 0;
+}
+
+.sm-card-subtitle {
+    font-size: 14.5px;
+    color: #64748B;
+    margin: 0 0 28px 0;
+}
+
+.sm-field-group {
+    margin-bottom: 20px;
+}
+
+.sm-field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 7px;
+}
+
+.sm-field-label {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #17212B;
+    margin: 0;
+}
+
+.sm-forgot-link {
+    font-size: 13px;
+    font-weight: 600;
+    color: #F47716;
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.sm-forgot-link:hover {
+    color: #092B48;
+    text-decoration: underline;
+}
+
+.sm-input-wrap {
+    position: relative;
+}
+
+.sm-input {
+    width: 100%;
+    height: 50px;
+    padding: 12px 15px;
+    font-size: 14.5px;
+    color: #17212B;
+    background-color: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 11px;
+    outline: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.sm-input.has-toggle {
+    padding-right: 46px;
+}
+
+.sm-input::placeholder {
+    color: #94A3B8;
+}
+
+.sm-input:focus {
+    border-color: #F47716;
+    box-shadow: 0 0 0 3.5px rgba(244, 119, 22, 0.14);
+}
+
+.sm-input.is-invalid {
+    border-color: #DC2626;
+}
+
+.sm-input.is-invalid:focus {
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
+.sm-password-toggle {
+    position: absolute;
+    right: 13px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: #64748B;
+    padding: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+}
+
+.sm-password-toggle:hover {
+    color: #092B48;
+}
+
+.sm-error-text {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #DC2626;
+    margin-top: 6px;
+}
+
+/* Primary Orange Sign In Button */
+.sm-btn-signin {
+    width: 100%;
+    height: 50px;
+    margin-top: 6px;
+    background: linear-gradient(135deg, #F47716 0%, #FF8A00 100%);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 11px;
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(244, 119, 22, 0.25);
+    transition: transform 0.15s ease, box-shadow 0.18s ease, opacity 0.15s ease;
+}
+
+.sm-btn-signin:hover:not(:disabled) {
+    background: linear-gradient(135deg, #E26A0D 0%, #F47716 100%);
+    box-shadow: 0 10px 22px rgba(244, 119, 22, 0.34);
+    transform: translateY(-1px);
+}
+
+.sm-btn-signin:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(244, 119, 22, 0.25);
+}
+
+.sm-btn-signin:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.sm-register-row {
+    margin-top: 22px;
+    text-align: center;
+    font-size: 13.5px;
+    color: #64748B;
+}
+
+.sm-register-link {
+    color: #F47716;
+    font-weight: 600;
+    text-decoration: none;
+    margin-left: 5px;
+}
+
+.sm-register-link:hover {
+    color: #092B48;
+    text-decoration: underline;
+}
+
+/* Local-Only Developer Quick Access */
+.sm-quick-section {
+    margin-top: 26px;
+    padding-top: 22px;
+    border-top: 1px solid #E2E8F0;
+}
+
+.sm-quick-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #64748B;
+    text-align: center;
+    margin-bottom: 13px;
+}
+
+.sm-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.sm-btn-quick {
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 11px;
+    font-size: 13.5px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    background: #FFFFFF;
+    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.sm-btn-quick:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.sm-btn-quick-superadmin {
+    color: #092B48;
+    border: 1.5px solid #092B48;
+}
+
+.sm-btn-quick-superadmin:hover:not(:disabled) {
+    background: #092B48;
+    color: #FFFFFF;
+    box-shadow: 0 5px 14px rgba(9, 43, 72, 0.2);
+}
+
+.sm-btn-quick-admin {
+    color: #F47716;
+    border: 1.5px solid #F47716;
+}
+
+.sm-btn-quick-admin:hover:not(:disabled) {
+    background: #F47716;
+    color: #FFFFFF;
+    box-shadow: 0 5px 14px rgba(244, 119, 22, 0.24);
+}
+
+/* =========================================================
+   RESPONSIVE BREAKPOINTS
+   ========================================================= */
+
+/* Laptop (1200px - 1440px) */
+@media (max-width: 1440px) {
+    .sm-login-brand {
+        padding: 32px 40px;
+    }
+
+    .sm-login-brand-inner {
+        gap: 22px;
+    }
+
+    .sm-brand-headline {
+        font-size: 33px;
+    }
+
+    .sm-login-card {
+        padding: 36px 34px;
+    }
+}
+
+/* Tablet Landscape (992px - 1199px, e.g. 1024x768) */
+@media (max-width: 1199px) {
+    .sm-login-brand {
+        flex: 0 0 50%;
+        width: 50%;
+        padding: 22px 24px;
+    }
+
+    .sm-login-brand-inner {
+        gap: 16px;
+    }
+
+    .sm-login-panel {
+        flex: 0 0 50%;
+        width: 50%;
+        padding: 64px 22px 24px;
+    }
+
+    .sm-brand-headline {
+        font-size: 26px;
+    }
+
+    .sm-brand-subtitle {
+        font-size: 13.5px;
+    }
+
+    .sm-preview-sidebar {
+        display: none;
+    }
+
+    .sm-preview-content {
+        grid-template-columns: 1fr;
+    }
+
+    .sm-preview-main {
+        padding: 13px 14px;
+        gap: 10px;
+    }
+
+    .sm-preview-lower {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .sm-feature-list {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+
+    .sm-feature-item {
+        min-height: 48px;
+        padding: 8px 9px;
+        gap: 7px;
+    }
+
+    .sm-feature-icon {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        font-size: 12px;
+    }
+
+    .sm-feature-text {
+        font-size: 11px;
+    }
+
+    .sm-login-card {
+        max-width: 430px;
+        padding: 28px 26px;
+    }
+
+    .sm-card-subtitle {
+        margin-bottom: 20px;
+    }
+
+    .sm-field-group {
+        margin-bottom: 14px;
+    }
+
+    .sm-quick-section {
+        margin-top: 18px;
+        padding-top: 16px;
+    }
+}
+
+/* Mobile & Tablet Portrait (<= 991px, e.g. 390x844) */
+@media (max-width: 991px) {
+    .sm-login-page {
+        flex-direction: column;
+        width: 100vw;
+        max-width: 100vw;
+    }
+
+    .sm-login-brand {
+        display: none;
+    }
+
+    .sm-login-panel {
+        flex: 1 1 auto;
+        width: 100%;
+        max-width: 100%;
+        min-height: 100vh;
+        padding: 70px 16px 28px;
+    }
+
+    .sm-mobile-brand {
+        display: block;
+        width: 100%;
+    }
+
+    .sm-login-card {
+        width: 100%;
+        max-width: 100%;
+        padding: 26px 20px;
+        border-radius: 18px;
+    }
+
+    .sm-login-lang {
+        top: 14px;
+        right: 16px;
+    }
+}
+
+@media (max-width: 520px) {
+    .sm-quick-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .sm-card-heading {
+        font-size: 24px;
+    }
+
+    .sm-card-subtitle {
+        font-size: 13.5px;
+    }
+}

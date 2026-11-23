@@ -1,0 +1,517 @@
+/* ==========================================================================
+   STOCKMATE — CENTRALIZED GLOBAL ORANGE & NAVY BRAND THEME
+   Preserves all layouts, spacing, and semantic colors (green/red/amber).
+   ========================================================================== */
+
+:root {
+    /* Official StockMate CSS Variables */
+    --sm-primary: #F47716;
+    --sm-primary-hover: #E9680B;
+    --sm-primary-light: #FFF4E8;
+    --sm-primary-border: #FED7AA;
+    --sm-primary-gradient: linear-gradient(135deg, #F47716, #FF8A00);
+    --sm-navy: #092B48;
+    --sm-navy-hover: #123B5D;
+    --sm-navy-light: #EAF1F7;
+    --sm-background: #F8FAFC;
+    --sm-surface: #FFFFFF;
+    --sm-text: #17212B;
+    --sm-muted: #64748B;
+    --sm-border: #E2E8F0;
+
+    /* Bootstrap 5 Primary Overrides */
+    --bs-primary: #F47716;
+    --bs-primary-rgb: 244, 119, 22;
+    --bs-indigo: #F47716;
+    --bs-purple: #F47716;
+    --bs-link-color: #F47716;
+    --bs-link-hover-color: #E9680B;
+    --bs-body-bg: #F8FAFC;
+    --bs-body-color: #17212B;
+}
+
+/* Base Surface & Typography Clarity */
+body {
+    background-color: var(--sm-background);
+    color: var(--sm-text);
+}
+
+a {
+    color: var(--sm-primary);
+}
+
+a:hover {
+    color: var(--sm-primary-hover);
+}
+
+/* ==========================================================================
+   BUTTONS (Primary Orange, Secondary White/Navy, Outline Orange)
+   ========================================================================== */
+.btn-primary:not(.bg-transparent),
+.btn-purple:not(.bg-transparent),
+.btn-indigo:not(.bg-transparent),
+.btn.btn-primary:not(.bg-transparent),
+.btn.btn-purple:not(.bg-transparent) {
+    background-color: var(--sm-primary) !important;
+    border-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.btn-primary:not(.bg-transparent):hover,
+.btn-primary:not(.bg-transparent):focus,
+.btn-primary:not(.bg-transparent):active,
+.btn-primary:not(.bg-transparent).active,
+.show > .btn-primary:not(.bg-transparent).dropdown-toggle,
+.btn-purple:not(.bg-transparent):hover,
+.btn-purple:not(.bg-transparent):focus,
+.btn-purple:not(.bg-transparent):active,
+.btn-indigo:not(.bg-transparent):hover,
+.btn-indigo:not(.bg-transparent):focus {
+    background-color: var(--sm-primary-hover) !important;
+    border-color: var(--sm-primary-hover) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 0 0 0.2rem rgba(244, 119, 22, 0.22) !important;
+}
+
+/* Preserve transparent dropdown toggles (e.g. Header user profile button) */
+.btn.bg-transparent,
+.dropdown-toggle.bg-transparent,
+.dropdown-toggle.bg-transparent:hover,
+.dropdown-toggle.bg-transparent:focus,
+.dropdown-toggle.bg-transparent:active,
+.show > .dropdown-toggle.bg-transparent {
+    background-color: transparent !important;
+    border-color: transparent !important;
+    color: var(--sm-text) !important;
+    box-shadow: none !important;
+}
+
+.btn-outline-primary,
+.btn-outline-purple {
+    color: var(--sm-primary) !important;
+    border-color: var(--sm-primary) !important;
+    background-color: transparent !important;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus,
+.btn-outline-primary:active,
+.btn-outline-primary.active,
+.btn-outline-purple:hover {
+    background-color: var(--sm-primary) !important;
+    border-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.btn-light-primary,
+.bg-light-primary {
+    background-color: var(--sm-primary-light) !important;
+    color: var(--sm-primary) !important;
+    border-color: var(--sm-primary-border) !important;
+}
+
+.btn-light-primary:hover {
+    background-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.btn-secondary:not(.sm-btn-quick) {
+    background-color: var(--sm-surface) !important;
+    color: var(--sm-navy) !important;
+    border: 1px solid var(--sm-border) !important;
+}
+
+.btn-secondary:not(.sm-btn-quick):hover,
+.btn-secondary:not(.sm-btn-quick):focus {
+    background-color: var(--sm-navy-light) !important;
+    color: var(--sm-navy) !important;
+    border-color: var(--sm-navy) !important;
+}
+
+/* Header POS Circle Button & Quick Shortcut Button */
+.pos-button {
+    background: var(--sm-primary-gradient) !important;
+    border: 1px solid var(--sm-primary) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 12px rgba(244, 119, 22, 0.25) !important;
+}
+
+.pos-button-highlight:hover,
+.pos-button:hover {
+    background: var(--sm-primary-light) !important;
+    border-color: var(--sm-primary) !important;
+    color: var(--sm-primary) !important;
+}
+
+.pos-button svg {
+    color: inherit !important;
+}
+
+/* User Avatars (Executive Deep Navy) */
+.custom-user-avatar,
+.user_avatar {
+    background: var(--sm-navy) !important;
+    color: #FFFFFF !important;
+}
+
+/* ==========================================================================
+   PRIMARY COLOR UTILITIES (Preserving green/red/amber semantic utilities)
+   ========================================================================== */
+.text-primary,
+.text-purple,
+.link-primary,
+.text-indigo {
+    color: var(--sm-primary) !important;
+}
+
+.bg-primary,
+.bg-purple {
+    background-color: var(--sm-primary) !important;
+}
+
+.border-primary,
+.border-purple {
+    border-color: var(--sm-primary) !important;
+}
+
+.badge.bg-light-primary,
+.badge-light-primary {
+    background-color: var(--sm-primary-light) !important;
+    color: var(--sm-primary) !important;
+}
+
+/* ==========================================================================
+   SIDEBAR NAVIGATION (Super Admin & Store Admin)
+   ========================================================================== */
+.pro-sidebar .pro-menu .pro-menu-item .pro-inner-item:hover,
+.pro-sidebar .pro-menu .pro-menu-item.active .pro-inner-item,
+.pro-sidebar .pro-menu .pro-menu-item > .pro-inner-item:hover,
+.pro-sidebar .pro-menu .pro-menu-item.active > .pro-inner-item,
+.aside-menu .nav-item .nav-link:hover,
+.aside-menu .nav-item .nav-link.active,
+.aside-menu-container .nav-link.active,
+.aside-menu-container .nav-link:hover,
+.sidebar-menu .nav-link.active,
+.sidebar-menu .nav-link:hover {
+    background-color: var(--sm-primary-light) !important;
+    color: var(--sm-primary) !important;
+    border-left-color: var(--sm-primary) !important;
+}
+
+.pro-sidebar .pro-menu .pro-menu-item.pro-sub-menu.pro-active-sub > div.pro-inner-item {
+    border-left: 0.313rem solid var(--sm-primary) !important;
+    background-color: var(--sm-primary-light) !important;
+}
+
+.pro-sidebar .pro-menu .pro-menu-item.pro-sub-menu.pro-active-sub > div > .pro-item-content,
+.pro-sidebar .pro-menu .pro-menu-item.pro-sub-menu.pro-active-sub > div svg,
+.pro-sidebar .pro-menu .pro-menu-item.active .pro-inner-item svg,
+.pro-sidebar .pro-menu .pro-menu-item.active .pro-inner-item .pro-item-content,
+.pro-sidebar .pro-menu .pro-menu-item.active .pro-inner-item .pro-item-content a,
+.pro-sidebar .pro-menu .pro-menu-item .pro-inner-item:hover svg,
+.pro-sidebar .pro-menu .pro-menu-item .pro-inner-item:hover .pro-item-content,
+.pro-sidebar .pro-menu .pro-menu-item .pro-inner-item:hover .pro-item-content a,
+.aside-menu .nav-item .nav-link.active svg,
+.aside-menu .nav-item .nav-link:hover svg {
+    color: var(--sm-primary) !important;
+}
+
+.pro-sidebar .pro-menu .pro-menu-item > .pro-inner-item,
+.pro-sidebar .pro-menu .pro-menu-item > .pro-inner-item a {
+    color: var(--sm-text);
+}
+
+/* Sidebar Search & Collapse Button Accents */
+.aside-search .form-control:focus {
+    border-color: var(--sm-primary) !important;
+    box-shadow: 0 0 0 3px rgba(244, 119, 22, 0.14) !important;
+}
+
+/* ==========================================================================
+   HEADER, TABS & DROPDOWNS
+   ========================================================================== */
+.header-active,
+.header-tabs:hover,
+.header-tabs:focus {
+    border-bottom: 2px solid var(--sm-primary) !important;
+    color: var(--sm-navy) !important;
+}
+
+.top-nav .nav-link.active,
+.top-nav .nav-link:hover,
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item .nav-link.active,
+.nav-pills .nav-link.active,
+.nav-line-tabs .nav-link.active,
+.nav-line-tabs .nav-link:hover {
+    color: var(--sm-primary) !important;
+    border-bottom-color: var(--sm-primary) !important;
+}
+
+.nav-tabs .nav-item .nav-link.active::after,
+.nav-tabs .nav-item .nav-link.active:after,
+.nav-tabs .nav-item:hover .nav-link::after,
+.nav-tabs .nav-item:hover .nav-link:after {
+    border-bottom-color: var(--sm-primary) !important;
+}
+
+.header .nav-item .nav-link.active::after,
+.top-navbar .nav-link.active::after {
+    background-color: var(--sm-primary) !important;
+    border-bottom-color: var(--sm-primary) !important;
+}
+
+.nav-pills .nav-link.active {
+    background-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.setting-tab .nav-item .nav-link:hover,
+.setting-tab .nav-item .nav-link.active {
+    color: var(--sm-navy) !important;
+    border-left: 5px solid var(--sm-primary) !important;
+    background: var(--sm-primary-light) !important;
+}
+
+/* Reports Header "More" dropdown button */
+.header .dropdown-toggle:not(.bg-transparent) {
+    background-color: var(--sm-primary-light) !important;
+    border-color: var(--sm-primary-border) !important;
+    color: var(--sm-primary) !important;
+}
+
+.header .dropdown-toggle:not(.bg-transparent):hover {
+    background-color: var(--sm-primary) !important;
+    border-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.dropdown-item.active,
+.dropdown-item:active {
+    background-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.dropdown-item:hover {
+    background-color: var(--sm-primary-light) !important;
+    color: var(--sm-navy) !important;
+}
+
+.language-btn:hover,
+.language-btn.language-btn-active {
+    background-color: var(--sm-primary) !important;
+    border-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+/* ==========================================================================
+   FORMS, INPUTS, CHECKBOXES, SWITCHES, DATEPICKER & REACT-SELECT
+   ========================================================================== */
+.form-control:focus,
+.form-select:focus,
+input:focus:not([type="checkbox"]):not([type="radio"]),
+textarea:focus,
+select:focus {
+    border-color: var(--sm-primary) !important;
+    box-shadow: 0 0 0 0.2rem rgba(244, 119, 22, 0.16) !important;
+}
+
+.form-check-input:checked {
+    background-color: var(--sm-primary) !important;
+    border-color: var(--sm-primary) !important;
+}
+
+.form-check-input:focus {
+    border-color: var(--sm-primary) !important;
+    box-shadow: 0 0 0 0.2rem rgba(244, 119, 22, 0.2) !important;
+}
+
+.datepicker .react-datepicker__day--selected,
+.react-datepicker__day--selected,
+.react-datepicker__day--in-selecting-range,
+.react-datepicker__day--in-range,
+.react-datepicker__day--keyboard-selected,
+.react-datepicker__month-text--selected,
+.react-datepicker__year-text--selected {
+    background-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.react-datepicker__day:hover {
+    background-color: var(--sm-primary-light) !important;
+    color: var(--sm-navy) !important;
+}
+
+/* ==========================================================================
+   PAGINATION, TABLES & LOADERS
+   ========================================================================== */
+.page-item.active .page-link,
+.pagination .page-item.active .page-link {
+    background-color: var(--sm-primary) !important;
+    border-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.page-link {
+    color: var(--sm-navy);
+}
+
+.page-link:hover {
+    background-color: var(--sm-primary-light) !important;
+    color: var(--sm-primary) !important;
+    border-color: var(--sm-primary-border) !important;
+}
+
+.rdt_Table .rdt_TableHead .rdt_TableHeadRow .rdt_TableCol:hover {
+    color: var(--sm-primary) !important;
+}
+
+.spinner-border.text-primary,
+.custom-loading,
+.custom-loading-detail {
+    color: var(--sm-primary) !important;
+}
+
+.sms_api .sms-api-main {
+    background-color: var(--sm-navy) !important;
+}
+
+/* ==========================================================================
+   DASHBOARD KPI WIDGETS (StockMate Orange + Deep Navy + Semantic Palette)
+   ========================================================================== */
+.widget-gradient-blue {
+    background: linear-gradient(135deg, #F47716 0%, #FF8A00 100%) !important;
+}
+
+.widget-gradient-purple {
+    background: linear-gradient(135deg, #092B48 0%, #123B5D 100%) !important;
+}
+
+.widget-gradient-orange {
+    background: linear-gradient(135deg, #EA580C 0%, #F97316 100%) !important;
+}
+
+.widget-gradient-lightblue {
+    background: linear-gradient(135deg, #1E3A5F 0%, #2B5278 100%) !important;
+}
+
+.widget-gradient-yellow {
+    background: linear-gradient(135deg, #D97706 0%, #F59E0B 100%) !important;
+}
+
+.widget-gradient-green {
+    background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
+}
+
+.widget-gradient-red {
+    background: linear-gradient(135deg, #334155 0%, #475569 100%) !important;
+}
+
+.widget-gradient-pink {
+    background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%) !important;
+}
+
+.widget.bg-primary,
+.dashboard-widget.bg-primary,
+.bg-primary.widget-icon {
+    background: var(--sm-primary-gradient) !important;
+}
+
+.bg-cyan-300,
+.bg-blue-300 {
+    background-color: var(--sm-navy) !important;
+}
+
+/* ==========================================================================
+   POS INTERFACE REBRANDING (Categories, Active Products, Cart, Checkout)
+   ========================================================================== */
+.top-nav .grp-select button {
+    background-color: var(--sm-primary) !important;
+    border-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.top-nav .grp-select button:hover {
+    background-color: var(--sm-primary-hover) !important;
+}
+
+.right-content .header-btn-grp .nav-item:not(.nav-green):not(.bg-btn-pink):not(.bg-danger):not(.bg-success) {
+    background-color: var(--sm-navy) !important;
+}
+
+.right-content .header-btn-grp .nav-item:not(.nav-green):not(.bg-btn-pink):not(.bg-danger):not(.bg-success):hover {
+    background-color: var(--sm-primary) !important;
+}
+
+.hold-list-badge {
+    background: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.left-content .main-table .counter button {
+    color: var(--sm-primary) !important;
+    background-color: var(--sm-primary-light) !important;
+    border-color: var(--sm-primary-border) !important;
+}
+
+.left-content .total-price__tax-filed {
+    border-bottom-color: var(--sm-primary) !important;
+}
+
+.pos-screen .button-list__item-active,
+.pos-screen .button-list .btn.active,
+.pos-screen .category-active,
+.pos-screen .brand-active,
+.right-content .button-list .custom-btn-size.item-active,
+.right-content .button-list .custom-btn-size:hover,
+.right-content .button-list .custom-btn-size:active {
+    background-color: var(--sm-primary) !important;
+    border-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.pos-screen .button-list__item:hover {
+    background-color: var(--sm-primary-light) !important;
+    color: var(--sm-primary) !important;
+    border-color: var(--sm-primary-border) !important;
+}
+
+.pos-screen .product-active,
+.pos-screen .product-custom-card.product-active {
+    border: 2px solid var(--sm-primary) !important;
+    box-shadow: 0 0 0 3px rgba(244, 119, 22, 0.15) !important;
+}
+
+.pos-screen .custom-badge-primary,
+.pos-screen .product-badge,
+.pos-screen .item-badge {
+    background-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.pos-screen .header-btn-grp .btn-primary,
+.pos-screen .pos-pay-btn {
+    background: var(--sm-primary-gradient) !important;
+    border-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.calculator .sides .equal,
+.calculator .sides button {
+    background: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+/* ==========================================================================
+   AUTH PAGES (Register / Forgot / Reset Password consistency)
+   ========================================================================== */
+.bg-theme-white .btn-purple,
+.bg-theme-white .btn-primary {
+    background: var(--sm-primary-gradient) !important;
+    border-color: var(--sm-primary) !important;
+    color: #FFFFFF !important;
+}
+
+.bg-theme-white .text-purple {
+    color: var(--sm-primary) !important;
+}

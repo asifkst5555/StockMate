@@ -61,6 +61,8 @@ return [
 
     'media_disc' => env('MEDIA_DISK', 'public'),
     'upgrade_mode' => env('UPGRADE_MODE'),
+    'demo_quick_login_enabled' => filter_var(env('DEMO_QUICK_LOGIN_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+    'demo_store_admin_email' => env('DEMO_STORE_ADMIN_EMAIL', 'admin@stockmate.com'),
 
     /*
     |--------------------------------------------------------------------------

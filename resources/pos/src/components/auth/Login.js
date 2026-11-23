@@ -2,7 +2,11 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import * as EmailValidator from "email-validator";
-import { loginAction, quickLoginAction } from "../../store/action/authAction";
+import {
+    demoStoreAdminQuickLoginAction,
+    loginAction,
+    quickLoginAction,
+} from "../../store/action/authAction";
 import TabTitle from "../../shared/tab-title/TabTitle";
 import { ROLES } from "../../constants";
 import {
@@ -16,6 +20,7 @@ import {
     faChartLine,
     faEye,
     faEyeSlash,
+    faRocket,
     faStore,
     faUserShield,
 } from "@fortawesome/free-solid-svg-icons";
@@ -31,6 +36,7 @@ const Login = () => {
     const { loginUser, frontCms } = useSelector((state) => state);
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [demoLoading, setDemoLoading] = useState(false);
     const [quickLoading, setQuickLoading] = useState(null);
     const token = Cookies.get("authToken");
 
@@ -120,8 +126,16 @@ const Login = () => {
         setShowPassword(!showPassword);
     };
 
+    const onDemoStoreAdminLogin = () => {
+        if (loading || demoLoading || quickLoading !== null) {
+            return;
+        }
+        setDemoLoading(true);
+        dispatch(demoStoreAdminQuickLoginAction(navigate, setDemoLoading));
+    };
+
     const onQuickLogin = (role) => {
-        if (loading || quickLoading) {
+        if (loading || demoLoading || quickLoading) {
             return;
         }
         setQuickLoading(role);
@@ -477,12 +491,42 @@ const Login = () => {
                         <button
                             type="submit"
                             className="sm-btn-signin"
-                            disabled={loading || quickLoading !== null}
+                            disabled={loading || demoLoading || quickLoading !== null}
                         >
                             {loading
                                 ? getFormattedMessage("globally.loading.label")
                                 : "Sign In"}
                         </button>
+
+                        {frontCms?.value?.demo_quick_login_enabled === true && (
+                            <div className="sm-demo-quick-wrap">
+                                <div className="sm-or-divider" aria-hidden="true">
+                                    <span>OR</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="sm-btn-demo-admin"
+                                    disabled={
+                                        loading ||
+                                        demoLoading ||
+                                        quickLoading !== null
+                                    }
+                                    onClick={onDemoStoreAdminLogin}
+                                >
+                                    <FontAwesomeIcon
+                                        icon={faRocket}
+                                        className="sm-btn-demo-admin-icon"
+                                    />
+                                    <span>
+                                        {demoLoading
+                                            ? getFormattedMessage(
+                                                  "globally.loading.label"
+                                              )
+                                            : "Quick Login as Store Admin"}
+                                    </span>
+                                </button>
+                            </div>
+                        )}
 
                         <div className="sm-register-row">
                             <span>

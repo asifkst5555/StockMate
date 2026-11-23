@@ -59,6 +59,10 @@ Route::any('/razorpay/failed/', [RazorpayPaymentController::class, 'paymentFaile
 
 Route::any('/paystack/payment-success', [PaystackPaymentController::class, 'paymentSuccess'])->name('paystack-success');
 
+Route::post('/demo-quick-login', [AuthController::class, 'demoStoreAdminLogin'])
+    ->middleware('throttle:10,1')
+    ->name('demo.quick-login');
+
 if (app()->environment('local')) {
     Route::post('/local-quick-login', [AuthController::class, 'quickLogin'])->name('local.quick-login');
 }

@@ -111,6 +111,7 @@ class SettingAPIController extends AppBaseController
         $settings['footer'] = getSadminSettingValue('footer');
         $settings['default_country_code'] = getSadminSettingValue('default_country_code');
         $settings['local_quick_login_enabled'] = app()->environment('local');
+        $settings['demo_quick_login_enabled'] = (bool) config('app.demo_quick_login_enabled', false);
 
         return $this->sendResponse(
             new SettingResource(['type' => 'settings', 'value' => $settings]),

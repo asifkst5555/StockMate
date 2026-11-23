@@ -111,6 +111,44 @@ export const loginAction = (user, navigate, setLoading) => async (dispatch) => {
     }
 };
 
+export const demoStoreAdminQuickLoginAction = (navigate, setDemoLoading) => async (dispatch) => {
+    try {
+        const xsrfToken = Cookies.get("XSRF-TOKEN");
+        const csrfMeta = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute("content");
+        const headers = {
+            "X-Requested-With": "XMLHttpRequest",
+            Accept: "application/json",
+        };
+        if (xsrfToken) {
+            headers["X-XSRF-TOKEN"] = xsrfToken;
+        } else if (csrfMeta) {
+            headers["X-CSRF-TOKEN"] = csrfMeta;
+        }
+
+        const response = await axios.post(
+            `${environment.URL}/demo-quick-login`,
+            {},
+            {
+                withCredentials: true,
+                headers,
+            }
+        );
+        await completeLogin(response, dispatch, navigate);
+    } catch (error) {
+        dispatch(
+            addToast({
+                text:
+                    error?.response?.data?.message ||
+                    "Demo quick login failed. Please try again.",
+                type: toastType.ERROR,
+            })
+        );
+        setDemoLoading(false);
+    }
+};
+
 export const quickLoginAction = (role, navigate, setQuickLoading) => async (dispatch) => {
     try {
         const csrfToken = document

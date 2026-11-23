@@ -119,6 +119,78 @@ class AuthController extends AppBaseController
     }
 
     /**
+     * One-click Store Admin demo login.
+     * Strictly gated by DEMO_QUICK_LOGIN_ENABLED=true, ignores any client-supplied account
+     * parameters, validates Store Admin role only, and explicitly rejects Super Admin accounts.
+     */
+    public function demoStoreAdminLogin(Request $request): JsonResponse
+    {
+        if (! config('app.demo_quick_login_enabled', false)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Demo quick login is not enabled.',
+            ], 404);
+        }
+
+        $targetEmail = trim((string) config('app.demo_store_admin_email', ''));
+        if ($targetEmail === '') {
+            return $this->sendError('Demo login is currently unavailable.', 503);
+        }
+
+        $user = User::withoutGlobalScopes()
+            ->whereRaw('lower(email) = ?', [strtolower($targetEmail)])
+            ->first();
+
+        if (! $user || ! $user->status || $user->email_verified_at === null) {
+            return $this->sendError('Demo login is currently unavailable.', 422);
+        }
+
+        // Enforce Store Admin role strictly and explicitly reject Super Admin accounts.
+        if ($user->hasRole(Role::SUPER_ADMIN) || ! $user->hasRole(Role::ADMIN)) {
+            Log::warning('Demo quick login rejected due to invalid target role.', [
+                'user_id' => $user->id,
+                'ip' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Demo login is not permitted for this account.',
+            ], 403);
+        }
+
+        Auth::login($user);
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
+        Session::put('auth', $user->id);
+
+        $user->language_id = Language::where('iso_code', $user->language)->value('id');
+        $userPermissions = $user->getAllPermissions()->pluck('name')->toArray();
+        $roleName = $user->roles->first()?->name;
+        unset($user->roles);
+        unset($user->permissions);
+
+        $token = $user->createToken('token')->plainTextToken;
+        $user->last_name = $user->last_name ?? '';
+
+        Log::info('Demo Store Admin quick login authenticated.', [
+            'user_id' => $user->id,
+            'ip' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'data' => [
+                'token' => $token,
+                'user' => $user,
+                'roles' => $roleName,
+                'expires_at' => config('sanctum.expiration'),
+                'permissions' => $userPermissions,
+            ],
+            'message' => 'Logged in successfully.',
+        ]);
+    }
+
+    /**
      * Strict local-only quick login for manual development testing.
      * Only permits the two predefined local accounts; never active outside APP_ENV=local.
      */

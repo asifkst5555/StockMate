@@ -237,16 +237,18 @@ const ThisWeekSalePurchaseChart = (props) => {
             </div>
             {getPermission(allConfigData?.permissions, Permissions.MANAGE_SALE) &&
                 <div className="col-xxl-4 col-12">
-                    <Card>
-                        <Card.Header className="pb-0 px-0 justify-content-center">
-                            <h4 className="mb-3 me-1">
+                    <Card className="stockmate-pie-card">
+                        <Card.Header className="stockmate-pie-card__header">
+                            <h5 className="stockmate-pie-card__title">
                                 {getFormattedMessage(
                                     "dashboard.TopSellingProducts.title"
                                 )}
-                            </h4>
-                            <h4>({moment(year).format("YYYY")})</h4>
+                            </h5>
+                            <span className="stockmate-pie-card__period">
+                                {moment(year).format("YYYY")}
+                            </span>
                         </Card.Header>
-                        <Card.Body className="p-3">
+                        <Card.Body className="stockmate-pie-card__body">
                             <TopSellingProductChart
                                 yearTopProduct={yearTopProduct}
                                 frontSetting={frontSetting}

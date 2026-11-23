@@ -52,21 +52,37 @@ const TopSellingProduct = (props) => {
         }
     }, [messages]);
 
+    const hasSalePermission = getPermission(
+        allConfigData?.permissions,
+        Permissions.MANAGE_SALE
+    );
+    const hasCustomerPermission = getPermission(
+        allConfigData?.permissions,
+        Permissions.MANAGE_CUSTOMERS
+    );
+    const isSingleColumn = !(hasSalePermission && hasCustomerPermission);
+
     return (
         <div className="pt-6">
-            <Row className="g-4">
-                {getPermission(allConfigData?.permissions, Permissions.MANAGE_SALE) && <div className="col-xxl-8 col-12">
-                    <Card>
-                        <Card.Header className="pb-0 px-10">
-                            <h5 className="mb-0">
+            <div
+                className={`stockmate-dashboard-split ${
+                    isSingleColumn ? "stockmate-dashboard-split--single" : ""
+                }`}
+            >
+                {hasSalePermission && <div className="stockmate-dashboard-split__left">
+                    <Card className="stockmate-table-card">
+                        <Card.Header className="stockmate-table-card__header">
+                            <h5 className="stockmate-pie-card__title">
                                 {getFormattedMessage(
                                     "dashboard.TopSellingProducts.title"
-                                )}{" "}
-                                ({moment().locale(languageCode).format("MMMM")})
+                                )}
                             </h5>
+                            <span className="stockmate-pie-card__period">
+                                {moment().locale(languageCode).format("MMMM")}
+                            </span>
                         </Card.Header>
-                        <Card.Body className="pt-7 pb-2">
-                            <Table responsive>
+                        <Card.Body className="stockmate-table-card__body">
+                            <Table responsive className="stockmate-top-products-table">
                                 <thead>
                                     <tr>
                                         <th>
@@ -74,12 +90,12 @@ const TopSellingProduct = (props) => {
                                                 "product.title"
                                             )}
                                         </th>
-                                        <th>
+                                        <th className="text-center">
                                             {getFormattedMessage(
                                                 "globally.detail.quantity"
                                             )}
                                         </th>
-                                        <th>
+                                        <th className="text-end">
                                             {getFormattedMessage(
                                                 "globally.detail.grand.total"
                                             )}
@@ -105,17 +121,17 @@ const TopSellingProduct = (props) => {
                                             );
                                             return (
                                                 <tr key={index}>
-                                                    <td className="py-4">
+                                                    <td className="stockmate-top-products-table__name">
                                                         {top.name}
                                                     </td>
-                                                    <td className="py-4">
-                                                        <span className="badge bg-light-primary me-2">
+                                                    <td className="text-center">
+                                                        <span className="stockmate-quantity-badge">
                                                             {top?.total_quantity && parseFloat(top?.total_quantity)?.toFixed(2)}{" "}
                                                             {top.sale_unit}
                                                         </span>
                                                     </td>
 
-                                                    <td className="py-4">
+                                                    <td className="text-end stockmate-top-products-table__total">
                                                         <OverlayTrigger
                                                             placement="bottom"
                                                             delay={{
@@ -146,13 +162,13 @@ const TopSellingProduct = (props) => {
                         </Card.Body>
                     </Card>
                 </div>}
-                {getPermission(allConfigData?.permissions, Permissions.MANAGE_CUSTOMERS) && <TopCustomersChart
+                {hasCustomerPermission && <TopCustomersChart
                     frontSetting={frontSetting}
                     languageCode={languageCode}
                     topCustomers={topCustomers}
                     allConfigData={allConfigData}
                 />}
-            </Row>
+            </div>
         </div>
     );
 };

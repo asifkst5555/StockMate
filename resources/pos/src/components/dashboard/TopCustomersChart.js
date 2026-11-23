@@ -37,10 +37,10 @@ const TopCustomersChart = ({ frontSetting, topCustomers, allConfigData, language
   const leftColumnItems = allData.slice(0, splitIndex);
   const rightColumnItems = allData.slice(splitIndex);
 
-  const isMobile = viewportWidth < 576;
-  const isNarrowDesktopCol = viewportWidth >= 1400 && viewportWidth < 1600;
-  const pieRadius = isMobile ? '40%' : isNarrowDesktopCol ? '40%' : '50%';
-  const labelWidth = isMobile ? 70 : isNarrowDesktopCol ? 78 : 105;
+  const isMobile = viewportWidth < 768;
+  const isMediumDesktop = viewportWidth >= 1200 && viewportWidth < 1400;
+  const pieRadius = isMobile ? '42%' : isMediumDesktop ? '50%' : '56%';
+  const labelWidth = isMobile ? 78 : isMediumDesktop ? 105 : 128;
 
   const formatAmount = (val) =>
     allConfigData?.is_currency_right === 'true'
@@ -81,13 +81,13 @@ const TopCustomersChart = ({ frontSetting, topCustomers, allConfigData, language
           width: labelWidth,
           overflow: 'break',
           lineHeight: 15,
-          fontSize: 11,
+          fontSize: 11.5,
           color: '#334155',
         },
         labelLine: {
           show: true,
-          length: isMobile ? 8 : 12,
-          length2: isMobile ? 6 : 10,
+          length: isMobile ? 8 : isMediumDesktop ? 12 : 14,
+          length2: isMobile ? 6 : isMediumDesktop ? 10 : 12,
           smooth: 0.15,
         },
         labelLayout: {
@@ -138,16 +138,16 @@ const TopCustomersChart = ({ frontSetting, topCustomers, allConfigData, language
           className="stockmate-pie-chart__swatch"
           style={{ backgroundColor: CHART_COLORS[item.index % CHART_COLORS.length] }}
         />
-        <span className="stockmate-pie-chart__text">
-          <span className="stockmate-pie-chart__label">{item.name}</span>
-          <span className="stockmate-pie-chart__meta">{pct}%</span>
+        <span className="stockmate-pie-chart__label">
+          {item.name}{' '}
+          <span className="stockmate-pie-chart__pct">({pct}%)</span>
         </span>
       </li>
     );
   };
 
   return (
-    <div className="col-xxl-4 col-12">
+    <div className="stockmate-dashboard-split__right">
       <Card className="stockmate-pie-card">
         <Card.Header className="stockmate-pie-card__header">
           <h5 className="stockmate-pie-card__title">
@@ -167,7 +167,7 @@ const TopCustomersChart = ({ frontSetting, topCustomers, allConfigData, language
                   {leftColumnItems.map(renderLegendItem)}
                 </ul>
                 {rightColumnItems.length > 0 && (
-                  <ul className="stockmate-pie-chart__legend-col">
+                  <ul className="stockmate-pie-chart__legend-col stockmate-pie-chart__legend-col--second">
                     {rightColumnItems.map(renderLegendItem)}
                   </ul>
                 )}

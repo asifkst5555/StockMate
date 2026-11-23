@@ -92,7 +92,7 @@ class DashboardAPIController extends AppBaseController
             ->groupBy('products.id')
             ->orderBy('total_quantity', 'desc')
             ->latest()
-            ->take(5)
+            ->take(10)
             ->get();
         $data = [];
         foreach ($topSellings as $topSelling) {

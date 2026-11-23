@@ -42,9 +42,23 @@ const LineChart = (props) => {
 
     const options = {
         responsive: true,
+        maintainAspectRatio: false,
+        layout: {
+            padding: {
+                top: 4,
+                right: 8,
+                bottom: 4,
+                left: 4,
+            },
+        },
         plugins: {
             legend: {
                 position: 'top',
+                labels: {
+                    padding: 16,
+                    usePointStyle: true,
+                    boxWidth: 10,
+                },
             },
             tooltip: {
                 callbacks: {
@@ -119,7 +133,7 @@ const LineChart = (props) => {
             },
         ],
     };
-    return <Line options={options} data={data} height={100}/>
+    return <Line options={options} data={data}/>
 }
 
 const mapStateToProps = (state) => {

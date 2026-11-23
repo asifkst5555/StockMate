@@ -82,6 +82,15 @@ const ThisWeekSalePurchaseChart = (props) => {
 
     const options = {
         responsive: true,
+        maintainAspectRatio: false,
+        layout: {
+            padding: {
+                top: 4,
+                right: 8,
+                bottom: 4,
+                left: 4,
+            },
+        },
         animation: {
             duration: 1200,
             easing: "easeOutQuart",
@@ -91,6 +100,14 @@ const ThisWeekSalePurchaseChart = (props) => {
             intersect: true,
         },
         plugins: {
+            legend: {
+                position: "top",
+                labels: {
+                    padding: 16,
+                    usePointStyle: true,
+                    boxWidth: 10,
+                },
+            },
             tooltip: {
                 backgroundColor: "rgba(0,0,0,0.7)",
                 titleColor: "#fff",
@@ -177,17 +194,26 @@ const ThisWeekSalePurchaseChart = (props) => {
         ],
     };
 
+    const hasTopSellingPermission = getPermission(
+        allConfigData?.permissions,
+        Permissions.MANAGE_SALE
+    );
+
     return (
-        <Row className="g-4">
-            <div className={`${getPermission(allConfigData?.permissions, Permissions.MANAGE_SALE) ? 'col-xxl-8' : 'col-xxl-12'} col-12`}>
-                <Card>
-                    <Card.Header className="pb-0 px-10">
-                        <h5 className="mb-0">
+        <div
+            className={`stockmate-dashboard-split ${
+                hasTopSellingPermission ? "" : "stockmate-dashboard-split--single"
+            }`}
+        >
+            <div className="stockmate-dashboard-split__left">
+                <Card className="stockmate-sales-card">
+                    <Card.Header className="stockmate-sales-card__header">
+                        <h5 className="stockmate-pie-card__title">
                             {getFormattedMessage(
                                 "dashboard.ThisWeekSales&Purchases.title"
                             )}
                         </h5>
-                        <div className="mb-2 chart-dropdown">
+                        <div className="chart-dropdown">
                             <NavDropdown
                                 title={<FontAwesomeIcon icon={faBars} />}
                             >
@@ -216,13 +242,12 @@ const ThisWeekSalePurchaseChart = (props) => {
                             </NavDropdown>
                         </div>
                     </Card.Header>
-                    <Card.Body>
-                        <div>
+                    <Card.Body className="stockmate-sales-card__body">
+                        <div className="stockmate-sales-card__chart">
                             {data && currency && isLineChart === false && (
                                 <Bar
                                     options={options}
                                     data={data}
-                                    height={100}
                                 />
                             )}
                             {data && currency && isLineChart === true && (
@@ -235,8 +260,8 @@ const ThisWeekSalePurchaseChart = (props) => {
                     </Card.Body>
                 </Card>
             </div>
-            {getPermission(allConfigData?.permissions, Permissions.MANAGE_SALE) &&
-                <div className="col-xxl-4 col-12">
+            {hasTopSellingPermission && (
+                <div className="stockmate-dashboard-split__right">
                     <Card className="stockmate-pie-card">
                         <Card.Header className="stockmate-pie-card__header">
                             <h5 className="stockmate-pie-card__title">
@@ -255,8 +280,9 @@ const ThisWeekSalePurchaseChart = (props) => {
                             />
                         </Card.Body>
                     </Card>
-                </div>}
-        </Row>
+                </div>
+            )}
+        </div>
     );
 };
 

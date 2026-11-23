@@ -1,7 +1,7 @@
 # StockMate — GitHub Image Asset Verification Report
 
 **Date:** 2026-11-23  
-**Commit Audited:** `96a7e27` (`main`)
+**Commits Audited:** `0dc0c17` / `96a7e27` (`main`, pushed to `origin/main`)
 
 ---
 
@@ -36,4 +36,8 @@
 
 ## 4. Fresh Clone Verification
 
-- **Status:** **PENDING GITHUB PUSH** (will be executed immediately into a temporary directory once `asifkst5555` authenticates and `git push -u origin main` completes).
+- **Status:** **PASS** — Fresh clone from `git@github.com:asifkst5555/StockMate.git` (`HEAD` = `0dc0c175b060320d10e57ff2981d53cf9885f8d6`) into a temporary directory confirmed:
+  - **`659` / `659`** tracked image files present on disk (`51.22 MB` total).
+  - **`159` / `159`** NorthStar primary product WebP images, **`159` / `159`** product thumbnails, **`14` / `14`** category WebPs, and **`5` / `5`** banner WebPs (`337` WebP files, `8.26 MB`).
+  - **`159` / `159`** product mappings in `database/seeders/data/northstar_usa_catalog.json` resolve to valid files on disk (`0` missing).
+  - **`0`** local Mac path dependencies (`/Users/macminim4`) in `app/` or `resources/pos/src/`.

@@ -23,10 +23,26 @@ class CreateProductRequest extends FormRequest
         return Product::rules();
     }
 
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $purchaseUnit = $this->input('purchase_unit');
+            $saleUnit = $this->input('sale_unit');
+
+            if (! empty($purchaseUnit) && ! empty($saleUnit) && (int) $purchaseUnit !== (int) $saleUnit) {
+                $validator->errors()->add(
+                    'sale_unit',
+                    'Unsupported unit conversion: purchase unit and sale unit must match (1:1 unit parity required).'
+                );
+            }
+        });
+    }
+
     public function messages(): array
     {
         return [
             'code.unique' => __('messages.error.code_taken'),
+            'product_code.unique' => __('messages.error.code_taken'),
             'images.*.max' => __('messages.error.images_max_size'),
         ];
     }

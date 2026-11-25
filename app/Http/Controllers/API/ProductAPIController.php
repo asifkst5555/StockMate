@@ -14,7 +14,9 @@ use App\Models\Product;
 use App\Models\PurchaseItem;
 use App\Models\SaleItem;
 use App\Models\VariationProduct;
+use App\Models\Warehouse;
 use App\Repositories\ProductRepository;
+use App\Services\BarcodeService;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -126,40 +128,62 @@ class ProductAPIController extends AppBaseController
 
     public function destroy($id): JsonResponse
     {
+        $product = Product::whereKey($id)->firstOrFail();
 
-        $purchaseItemModels = [
+        $linkedItemModels = [
             PurchaseItem::class,
-        ];
-        $saleItemModels = [
             SaleItem::class,
+            \App\Models\PurchaseReturnItem::class,
+            \App\Models\SaleReturnItem::class,
+            \App\Models\AdjustmentItem::class,
+            \App\Models\TransferItem::class,
+            \App\Models\QuotationItem::class,
+            \App\Models\HoldItem::class,
+            \App\Models\StockMovement::class,
         ];
-        $purchaseResult = canDelete($purchaseItemModels, 'product_id', $id);
-        $saleResult = canDelete($saleItemModels, 'product_id', $id);
-        if ($purchaseResult || $saleResult) {
+        $hasLinkedRecords = canDelete($linkedItemModels, 'product_id', $product->id);
+        $hasActiveStock = \App\Models\ManageStock::where('product_id', $product->id)
+            ->where('quantity', '>', 0)
+            ->exists();
+
+        if ($hasLinkedRecords || $hasActiveStock) {
             return $this->sendError(__('messages.error.product_cant_deleted'));
         }
 
-        if (File::exists(Storage::path('product_barcode/barcode-PR_' . $id . '.png'))) {
-            File::delete(Storage::path('product_barcode/barcode-PR_' . $id . '.png'));
-        }
-
-        $product = $this->productRepository->find($id);
         $mainProduct = MainProduct::withCount('products')->find($product->main_product_id);
 
-        if ($mainProduct->product_type == MainProduct::VARIATION_PRODUCT && $mainProduct->products_count <= 1) {
+        if ($mainProduct && $mainProduct->product_type == MainProduct::VARIATION_PRODUCT && $mainProduct->products_count <= 1) {
             return $this->sendError('You can not delete last variation product');
         }
 
-        VariationProduct::where('product_id', $id)->delete();
+        if (File::exists(Storage::path('product_barcode/barcode-PR_' . $product->id . '.png'))) {
+            File::delete(Storage::path('product_barcode/barcode-PR_' . $product->id . '.png'));
+        }
 
-        $this->productRepository->delete($id);
+        VariationProduct::where('product_id', $product->id)->delete();
+
+        $this->productRepository->delete($product->id);
 
         return $this->sendSuccess('Product deleted successfully');
     }
 
     public function productImageDelete($mediaId): JsonResponse
     {
-        $media = Media::where('id', $mediaId)->firstOrFail();
+        // SEC-A2: Ensure media belongs to a Product/MainProduct owned by the current tenant
+        $media = Media::whereKey($mediaId)
+            ->whereIn('model_type', [MainProduct::class, Product::class])
+            ->first();
+
+        if (! $media) {
+            return $this->sendError('Product image not found.', 404);
+        }
+
+        $ownerClass = $media->model_type;
+        $owner = $ownerClass::whereKey($media->model_id)->first();
+        if (! $owner) {
+            return $this->sendError('Product image not found.', 404);
+        }
+
         $media->delete();
 
         return $this->sendSuccess('Product image deleted successfully');
@@ -167,19 +191,21 @@ class ProductAPIController extends AppBaseController
 
     public function importProducts(Request $request): JsonResponse
     {
-        Excel::import(new ProductImport, request()->file('file'));
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
+        ]);
+
+        Excel::import(new ProductImport, $request->file('file'));
 
         return $this->sendSuccess('Products imported successfully');
     }
 
     public function getProductExportExcel(Request $request): JsonResponse
     {
-        if (Storage::exists('excel/product-excel-export.xlsx')) {
-            Storage::delete('excel/product-excel-export.xlsx');
-        }
-        Excel::store(new ProductExcelExport, 'excel/product-excel-export.xlsx');
-
-        $data['product_excel_url'] = Storage::url('excel/product-excel-export.xlsx');
+        $data['product_excel_url'] = \App\Services\ProtectedExportService::storeExcel(
+            new ProductExcelExport,
+            'product-excel-export'
+        );
 
         return $this->sendResponse($data, 'Product retrieved successfully');
     }
@@ -199,9 +225,89 @@ class ProductAPIController extends AppBaseController
         return $this->sendResponse($data, 'Products retrieve successfully.');
     }
 
-    public function generateStandaloneBarcode(Request $request)
+    public function generateStandaloneBarcode(Request $request): JsonResponse
     {
-        $barcode =  $this->productRepository->generateBarcodeBase64($request->code);
+        $code = trim((string) $request->input('code', ''));
+        $symbol = (int) $request->input('barcode_symbol', Product::CODE128);
+
+        if ($code === '') {
+            return $this->sendError('Barcode value is required.', 422);
+        }
+
+        try {
+            $barcode = $this->productRepository->generateBarcodeBase64($code, $symbol);
+        } catch (UnprocessableEntityHttpException $e) {
+            return $this->sendError($e->getMessage(), 422);
+        }
+
         return $this->sendResponse($barcode, 'Barcode generated successfully.');
+    }
+
+    /**
+     * Exact barcode lookup for POS scanner workflows (tenant & warehouse scoped).
+     */
+    public function findByBarcode(Request $request): ProductResource|JsonResponse
+    {
+        $barcode = trim((string) $request->query('barcode', ''));
+        $warehouseId = $request->query('warehouse_id');
+
+        if ($barcode === '') {
+            return $this->sendError('Barcode is required.', 422);
+        }
+
+        $hasWarehouse = $warehouseId !== null && $warehouseId !== '' && $warehouseId !== 'null';
+        if ($hasWarehouse) {
+            if (!is_numeric($warehouseId) || !Warehouse::where('id', (int) $warehouseId)->exists()) {
+                return $this->sendError('Warehouse not found.', 404);
+            }
+        }
+
+        $query = Product::query()
+            ->where(function ($q) use ($barcode) {
+                $q->where('code', $barcode)
+                    ->orWhere('product_code', $barcode);
+            })
+            ->orderByRaw('CASE WHEN code = ? THEN 0 ELSE 1 END', [$barcode]);
+
+        if ($hasWarehouse) {
+            $wid = (int) $warehouseId;
+            $query->with([
+                'stock' => function (HasOne $q) use ($wid) {
+                    $q->where('manage_stocks.warehouse_id', $wid);
+                },
+            ]);
+        }
+
+        $product = $query->first();
+
+        if (!$product) {
+            return $this->sendError('Product not found for barcode.', 404);
+        }
+
+        return new ProductResource($product);
+    }
+
+    /**
+     * Ensure a product's barcode PNG exists on the active storage disk.
+     */
+    public function ensureBarcode(int $id): JsonResponse
+    {
+        $product = Product::find($id);
+
+        if (!$product) {
+            return $this->sendError('Product not found.', 404);
+        }
+
+        $barcodeService = app(BarcodeService::class);
+        $result = $barcodeService->ensureProductBarcodePng($product, false, false);
+
+        if ($result['status'] === 'failed_validation') {
+            return $this->sendError($result['error'] ?? 'Invalid product barcode.', 422);
+        }
+
+        return $this->sendResponse([
+            'status' => $result['status'],
+            'barcode_url' => $barcodeService->resolveProductBarcodeUrl($product),
+        ], 'Barcode ready.');
     }
 }

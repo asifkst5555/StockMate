@@ -18,37 +18,37 @@ class SupplierImport implements ToCollection, WithChunkReading, WithStartRow, Wi
     {
         $collection = $rows->toArray();
 
-        foreach ($collection as $key => $row) {
-            try {
-                DB::beginTransaction();
-
-                $email = trim((string) ($row[1] ?? ''));
-                $supplierEmail = Supplier::whereEmail($email)->exists();
-                if ($supplierEmail) {
-                    throw new UnprocessableEntityHttpException('Email '.$email.' is already exist.');
-                }
-
-                if (preg_match("/^([a-z0-9\+_\-]+)(\.[a-z0-9\+_\-]+)*@([a-z0-9\-]+\.)+[a-z]{2,6}$/ix", $email) == 0) {
-                    throw new UnprocessableEntityHttpException('Email '.$email.' is not the valid email address.');
-                }
-
-                $supplierData = [
-                    'name' => trim((string) $row[0]),
-                    'email' => $email,
-                    'phone' => trim((string) $row[2]),
-                    'country' => trim((string) $row[3]),
-                    'city' => trim((string) $row[4]),
-                    'address' => trim((string) $row[5]),
-                ];
-
-                Supplier::create($supplierData);
-
-                DB::commit();
-            } catch (\Exception $e) {
-                DB::rollBack();
-                throw new UnprocessableEntityHttpException($e->getMessage());
+        foreach ($collection as $row) {
+            $email = trim((string) ($row[1] ?? ''));
+            if (Supplier::whereEmail($email)->exists()) {
+                throw new UnprocessableEntityHttpException('Email ' . $email . ' is already exist.');
             }
+
+            if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                throw new UnprocessableEntityHttpException('Email ' . $email . ' is not the valid email address.');
+            }
+
+            $supplierData = [
+                'name' => $this->sanitizeCsvCell((string) ($row[0] ?? '')),
+                'email' => $email,
+                'phone' => trim((string) ($row[2] ?? '')),
+                'country' => $this->sanitizeCsvCell((string) ($row[3] ?? '')),
+                'city' => $this->sanitizeCsvCell((string) ($row[4] ?? '')),
+                'address' => $this->sanitizeCsvCell((string) ($row[5] ?? '')),
+            ];
+
+            Supplier::create($supplierData);
         }
+    }
+
+    private function sanitizeCsvCell(string $value): string
+    {
+        $trimmed = trim($value);
+        if ($trimmed !== '' && preg_match('/^[=+\-@\t\r]/', $trimmed) === 1) {
+            return "'" . $trimmed;
+        }
+
+        return $trimmed;
     }
 
     public function chunkSize(): int
@@ -65,8 +65,8 @@ class SupplierImport implements ToCollection, WithChunkReading, WithStartRow, Wi
     {
         return [
             '0' => 'required',
-            '1' => 'required',
-            '2' => 'required|numeric',
+            '1' => 'required|email',
+            '2' => ['required', 'regex:/^[0-9+\-\s().]{6,25}$/'],
             '3' => 'required',
             '4' => 'required',
             '5' => 'required',

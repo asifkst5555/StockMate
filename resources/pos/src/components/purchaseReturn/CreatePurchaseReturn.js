@@ -10,7 +10,7 @@ import {addPurchaseReturn} from '../../store/action/purchaseReturnAction';
 import {getFormattedMessage, getFormattedOptions} from '../../shared/sharedMethod';
 import { fetchPurchase } from '../../store/action/purchaseAction';
 import { editPurchaseReturnArray } from './editPurchaseReturnArray';
-import { saleStatusOptions } from '../../constants';
+import { saleReturnStatusOptions } from '../../constants';
 
 const CreatePurchaseReturn = (props) => {
     const {addPurchaseReturn, warehouses, fetchAllWarehouses, fetchAllSuppliers, suppliers, purchases, fetchPurchase} = props;
@@ -35,8 +35,10 @@ const CreatePurchaseReturn = (props) => {
     const warehouse = warehouses.filter( ( warehouse ) => warehouse.id === warehouseId );
     const warehouseName = warehouse[ 0 ] && warehouse[ 0 ].attributes && warehouse[ 0 ].attributes.name
 
-    const statusFilterOptions = getFormattedOptions( saleStatusOptions )
-    const statusDefaultValue = purchases && purchases.attributes && purchases.attributes.status && statusFilterOptions.filter( ( item ) => item.id === purchases.attributes.status )
+    const statusFilterOptions = getFormattedOptions( saleReturnStatusOptions )
+    const matchedStatus = statusFilterOptions.find(
+        ( item ) => Number( item.id ) === Number( purchases?.attributes?.status )
+    ) || statusFilterOptions[ 0 ];
 
     const itemsValue = purchases && purchases.attributes && {
         date: purchases.attributes.date,
@@ -56,10 +58,10 @@ const CreatePurchaseReturn = (props) => {
         newItem: '',
         id: purchases.id,
         purchase_id: purchases.id,
-        status_id: {
-            label: statusDefaultValue[ 0 ] && statusDefaultValue[ 0 ].name,
-            value: statusDefaultValue[ 0 ] && statusDefaultValue[ 0 ].id
-        }
+        status_id: matchedStatus ? {
+            label: matchedStatus.name,
+            value: matchedStatus.id
+        } : null
     };
 
     return (

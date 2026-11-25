@@ -70,6 +70,7 @@ class Kernel extends HttpKernel
         'multi_tenant' => \App\Http\Middleware\MultiTenantMiddleware::class,
         'set_language' => \App\Http\Middleware\SetLanguage::class,
         'check_subscription' => \App\Http\Middleware\CheckSubscription::class,
+        'plan_feature' => \App\Http\Middleware\CheckPlanFeature::class,
         'active_user' => \App\Http\Middleware\EnsureUserIsActive::class,
     ];
 }

@@ -3,6 +3,7 @@
 namespace App\Exceptions;
 
 use App\DTOs\JSONApiError;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
@@ -10,6 +11,8 @@ use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Exceptions\UnauthorizedException;
 use Symfony\Component\HttpFoundation\Response as ResponseAlias;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -70,11 +73,21 @@ class Handler extends ExceptionHandler
             ]), ResponseAlias::HTTP_UNAUTHORIZED);
         }
 
-        if ($exception instanceof UnauthorizedException) {
+        if ($exception instanceof UnauthorizedException || $exception instanceof AuthorizationException || $exception instanceof AccessDeniedHttpException) {
             return response()->json(new JSONApiError([
                 'success' => false,
-                'message' => 'User dose not have the right permission.',
+                'message' => $exception instanceof UnauthorizedException
+                    ? 'User dose not have the right permission.'
+                    : ($exception->getMessage() ?: 'Forbidden.'),
             ]), ResponseAlias::HTTP_FORBIDDEN);
+        }
+
+        if (($exception instanceof ModelNotFoundException || $exception instanceof NotFoundHttpException)
+            && ($request->expectsJson() || $request->isXmlHttpRequest())) {
+            return response()->json(new JSONApiError([
+                'success' => false,
+                'message' => $exception instanceof ModelNotFoundException ? $message : ($exception->getMessage() ?: 'Resource not found.'),
+            ]), ResponseAlias::HTTP_NOT_FOUND);
         }
 
         //        if ($exception instanceof ValidationException) {

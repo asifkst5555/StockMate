@@ -2,157 +2,239 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PaymentIntent;
 use App\Models\Plan;
 use App\Models\SadminSetting;
 use App\Models\Subscription;
-use App\Models\Transaction;
-use App\Models\User;
 use App\Repositories\SubscriptionRepository;
+use App\Services\CurrencyMinorUnit;
+use App\Services\PaymentIntentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Srmklive\PayPal\Services\PayPal;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpKernel\Exception\HttpException;
+use Srmklive\PayPal\Services\PayPal;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 class PaypalPaymentController extends AppBaseController
 {
-    /** @var SubscriptionRepository */
-    private $subscriptionRepository;
+    private SubscriptionRepository $subscriptionRepository;
+    private PaymentIntentService $paymentIntentService;
 
-    public function __construct(SubscriptionRepository $subscriptionRepository)
-    {
+    public function __construct(
+        SubscriptionRepository $subscriptionRepository,
+        ?PaymentIntentService $paymentIntentService = null
+    ) {
         $this->subscriptionRepository = $subscriptionRepository;
+        $this->paymentIntentService = $paymentIntentService ?? new PaymentIntentService($subscriptionRepository);
+    }
+
+    protected function createPaypalOrder(array $data): array
+    {
+        $provider = new PayPal();
+        $provider->getAccessToken();
+
+        return (array) $provider->createOrder($data);
+    }
+
+    protected function capturePaypalOrder(string $token): array
+    {
+        $provider = new PayPal();
+        $provider->getAccessToken();
+
+        return (array) $provider->capturePaymentOrder($token);
+    }
+
+    private function configurePayPal(): ?array
+    {
+        $sadminSetting = SadminSetting::whereIn('key', ['paypal_client_id', 'paypal_secret', 'paypal_mode'])
+            ->pluck('value', 'key')
+            ->toArray();
+
+        $clientId = ! empty($sadminSetting['paypal_client_id']) ? $sadminSetting['paypal_client_id'] : config('payment.paypal.client_id');
+        $clientSecret = ! empty($sadminSetting['paypal_secret']) ? $sadminSetting['paypal_secret'] : config('payment.paypal.client_secret');
+        $mode = ! empty($sadminSetting['paypal_mode']) ? $sadminSetting['paypal_mode'] : config('payment.paypal.mode', 'sandbox');
+
+        if (empty($clientId) || empty($clientSecret)) {
+            return null;
+        }
+
+        config([
+            'paypal.mode'                  => $mode,
+            'paypal.sandbox.client_id'     => $clientId,
+            'paypal.sandbox.client_secret' => $clientSecret,
+            'paypal.live.client_id'        => $clientId,
+            'paypal.live.client_secret'    => $clientSecret,
+        ]);
+
+        return ['client_id' => $clientId, 'mode' => $mode];
     }
 
     public function generateSession(Request $request)
     {
         $input = $request->validate([
-            'plan_id' => 'required',
-            'amount' => 'required',
+            'plan_id' => 'required|integer|exists:plans,id',
+            'amount' => 'nullable|numeric|gt:0',
+            'stores' => 'nullable|array',
+            'stores.*' => 'integer',
         ]);
 
-        $plan = Plan::findOrFail($input['plan_id']);
-        $amount = $input['amount'];
-        if (! in_array(strtoupper($plan->currency->code), getPayPalSupportedCurrencies())) {
-            return $this->sendError(__('messages.error.currency_not_supported_paypal'));
+        $plan = Plan::with('currency')->findOrFail($input['plan_id']);
+        $currencyCode = strtoupper($plan->currency->code ?? 'USD');
+
+        if (! in_array($currencyCode, getPayPalSupportedCurrencies(), true)) {
+            return $this->sendError(__('messages.error.currency_not_supported_paypal'), 422);
         }
-        $sadminSetting = SadminSetting::whereIn('key', ['paypal_client_id', 'paypal_secret', 'paypal_mode'])->pluck('value', 'key')->toArray();
 
-        $clientId = !empty($sadminSetting['paypal_client_id']) ? $sadminSetting['paypal_client_id'] : config('payment.paypal.client_id');
-        $clientSecret = !empty($sadminSetting['paypal_secret']) ? $sadminSetting['paypal_secret'] : config('payment.paypal.client_secret');
-        $mode = !empty($sadminSetting['paypal_mode']) ? $sadminSetting['paypal_mode'] : config('payment.paypal.mode');
+        if ($this->configurePayPal() === null) {
+            return $this->sendError('PayPal credentials are not set', 422);
+        }
 
-        config([
-            'paypal.mode'                  => $mode,
-            'paypal.sandbox.client_id'     => $clientId,
-            'paypal.sandbox.client_secret' => $clientSecret,
-            'paypal.live.client_id'        => $clientId,
-            'paypal.live.client_secret'    => $clientSecret,
-        ]);
+        try {
+            $intent = $this->paymentIntentService->createIntent(
+                Auth::user(),
+                $plan,
+                Subscription::TYPE_PAYPAL,
+                $request->stores ?? null,
+                'paypal'
+            );
+        } catch (UnprocessableEntityHttpException $e) {
+            return $this->sendError($e->getMessage(), 422);
+        }
 
-        $provider = new PayPal();
-        $provider->getAccessToken();
-
-        $metadata = json_encode([
-            'user_id' => Auth::user()->id,
-            'stores' => json_encode($request->stores ?? []),
-            'plan_id' => $input['plan_id'],
-        ]);
+        $amountFormatted = CurrencyMinorUnit::formatDecimal($intent->amount_decimal, $intent->currency, 'paypal');
 
         $data = [
-            'intent'              => 'CAPTURE',
-            'purchase_units'      => [
+            'intent' => 'CAPTURE',
+            'purchase_units' => [
                 [
-                    'reference_id' => $metadata,
-                    'amount'       => [
-                        'value'         => $amount,
-                        'currency_code' => 'usd',
+                    'reference_id' => $intent->reference,
+                    'custom_id' => $intent->reference,
+                    'amount' => [
+                        'value' => $amountFormatted,
+                        'currency_code' => $intent->currency,
                     ],
                 ],
             ],
             'application_context' => [
-                'cancel_url' =>  route('paypal-failed', ['plan_id' => $plan->id, 'amount' => $amount]) . '&error=payment_cancelled',
+                'cancel_url' => route('paypal-failed', ['plan_id' => $plan->id]) . '&error=payment_cancelled',
                 'return_url' => route('paypal-success'),
             ],
-
         ];
 
-        $order = $provider->createOrder($data);
+        try {
+            $order = $this->createPaypalOrder($data);
+            $orderId = (string) ($order['id'] ?? '');
+            $approveUrl = $this->extractApproveUrl($order['links'] ?? []);
 
-        return $this->sendResponse(['url' => $order['links'][1]['href']], 'Paypal session generated successfully.');
+            if ($orderId === '' || $approveUrl === null) {
+                $this->paymentIntentService->markTerminalFailure($intent, PaymentIntent::STATUS_FAILED);
+
+                return $this->sendError('Unable to initialize PayPal checkout order.', 422);
+            }
+
+            $this->paymentIntentService->attachProviderReference($intent, $orderId);
+
+            return $this->sendResponse(['url' => $approveUrl], 'Paypal session generated successfully.');
+        } catch (\Throwable $e) {
+            $this->paymentIntentService->markTerminalFailure($intent, PaymentIntent::STATUS_FAILED);
+            Log::error('PayPal order creation failed.', [
+                'intent_ref' => $intent->reference,
+                'user_id' => $intent->user_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->sendError('Unable to initialize PayPal checkout order.', 422);
+        }
     }
 
     public function paymentSuccess(Request $request)
     {
-        $request['token'] = Str::after($request['token'], 'token=');
+        $rawToken = (string) ($request->query('token') ?? $request->input('token', ''));
+        $token = Str::after($rawToken, 'token=');
+        if (empty($token)) {
+            return redirect('/app/user/payment-failed?status=false');
+        }
 
-        $sadminSetting = SadminSetting::whereIn('key', ['paypal_client_id', 'paypal_secret'])->pluck('value', 'key')->toArray();
-
-        $clientId = !empty($sadminSetting['paypal_client_id']) ? $sadminSetting['paypal_client_id'] : config('payment.paypal.client_id');
-        $clientSecret = !empty($sadminSetting['paypal_secret']) ? $sadminSetting['paypal_secret'] : config('payment.paypal.client_secret');
-        $mode = !empty(config('payment.paypal.mode')) ? config('payment.paypal.mode') : 'sandbox';
-
-        config([
-            'paypal.mode'                  => $mode,
-            'paypal.sandbox.client_id'     => $clientId,
-            'paypal.sandbox.client_secret' => $clientSecret,
-            'paypal.live.client_id'        => $clientId,
-            'paypal.live.client_secret'    => $clientSecret,
-        ]);
-
-        $provider = new PayPal();
-        $provider->getAccessToken();
-        $token = $request['token'];
-        // $orderInfo = $provider->showOrderDetails($token);
+        $this->configurePayPal();
 
         try {
-            $response = $provider->capturePaymentOrder($token);
-            $metaData = json_decode($response['purchase_units'][0]['reference_id'], true);
-            $value =  json_decode($response['purchase_units'][0]['payments']['captures'][0]['amount']['value'], true);
-            $user = User::findorfail($metaData['user_id']);
+            $response = $this->capturePaypalOrder($token);
 
-            $transaction = Transaction::create([
-                'tenant_id' => $user->tenant_id,
-                'transaction_id' => $response['id'],
-                'amount' => $value,
-                'type' => Subscription::TYPE_PAYPAL,
-                'status' => Transaction::PAID,
-                'user_id' => $user->id,
-                'meta' => json_encode($response),
-            ]);
+            $orderId = (string) ($response['id'] ?? '');
+            $orderStatus = strtoupper((string) ($response['status'] ?? ''));
+            $purchaseUnit = $response['purchase_units'][0] ?? null;
+            $capture = is_array($purchaseUnit) ? ($purchaseUnit['payments']['captures'][0] ?? null) : null;
 
-            $stores = $metaData['stores'] ?? null;
-
-            if (!empty($stores)) {
-                if (is_string($stores)) {
-                    $decoded = json_decode($stores, true);
-                    $stores = is_array($decoded) ? $decoded : null;
-                }
-                if (is_array($stores)) {
-                    $stores = array_filter($stores, fn($item) => !empty($item));
-                    $stores = empty($stores) ? null : array_values($stores);
-                }
+            // Strictly require COMPLETED order AND an explicit COMPLETED capture resource with ID
+            if ($orderId === '' || $orderStatus !== 'COMPLETED' || ! is_array($capture)) {
+                return redirect('/app/user/payment-failed?status=false');
             }
 
-            $this->subscriptionRepository->createSubscription([
-                'plan_id' => $metaData['plan_id'],
-                'user_id' => $metaData['user_id'],
-                'stores' => $stores ?? null,
-                'payment_type' => Subscription::TYPE_PAYPAL,
-                'transaction_id' => $transaction->id,
+            $captureId = (string) ($capture['id'] ?? '');
+            $captureStatus = strtoupper((string) ($capture['status'] ?? ''));
+            if ($captureId === '' || $captureStatus !== 'COMPLETED') {
+                return redirect('/app/user/payment-failed?status=false');
+            }
+
+            $actualCurrency = strtoupper((string) ($capture['amount']['currency_code'] ?? ''));
+            $rawValue = $capture['amount']['value'] ?? null;
+            if ($actualCurrency === '' || ! is_numeric($rawValue)) {
+                return redirect('/app/user/payment-failed?status=false');
+            }
+
+            $actualAmountMinor = CurrencyMinorUnit::parseDecimalToMinorUnits($rawValue, $actualCurrency, 'paypal');
+
+            $internalRef = (string) ($purchaseUnit['reference_id'] ?? $purchaseUnit['custom_id'] ?? $capture['custom_id'] ?? '');
+            $intent = $this->paymentIntentService->findForGateway(
+                Subscription::TYPE_PAYPAL,
+                $orderId,
+                $internalRef !== '' ? $internalRef : null
+            );
+
+            if (! $intent) {
+                Log::warning('PayPal callback rejected: no matching server PaymentIntent.', ['order_id' => $orderId]);
+
+                return redirect('/app/user/payment-failed?status=false');
+            }
+
+            $this->paymentIntentService->settleIntent(
+                $intent,
+                $captureId,
+                $actualAmountMinor,
+                $actualCurrency,
+                $response,
+                null,
+                null,
+                'paypal'
+            );
+
+            return redirect('/app/user/payment-success?status=true');
+        } catch (\Throwable $e) {
+            Log::warning('PayPal callback verification failed.', [
+                'token' => $token,
+                'error' => $e->getMessage(),
             ]);
 
-            // Payment success redirect url
-            return redirect('/app/user/payment-success?status=true');
-        } catch (HttpException $e) {
-            throw new UnprocessableEntityHttpException($e->getMessage());
+            return redirect('/app/user/payment-failed?status=false');
         }
     }
 
-    public function paymentFailed()
+    private function extractApproveUrl(array $links): ?string
     {
-        // Payment failed redirect url
+        foreach ($links as $link) {
+            if (is_array($link) && strtolower((string) ($link['rel'] ?? '')) === 'approve' && ! empty($link['href'])) {
+                return (string) $link['href'];
+            }
+        }
+
+        return null;
+    }
+
+    public function paymentFailed(Request $request)
+    {
+        // V-06: Public GET failure redirect is strictly read-only (never mutates PaymentIntent state).
+        // Authoritative transitions happen via signed webhooks and PaymentIntent TTL expiration.
         return redirect('/app/user/payment-failed?status=false');
     }
 }

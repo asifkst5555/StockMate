@@ -1,3 +1,4 @@
+import { downloadProtectedFile } from '../../../../shared/downloadProtectedFile';
 import React, { useEffect, useState } from "react";
 import { connect, useDispatch } from "react-redux";
 import ReactDataTable from "../../../../shared/table/ReactDataTable";
@@ -126,11 +127,8 @@ const PurchaseReturnTab = (props) => {
             .get(
                 apiBaseURL.SUPPLIER_PURCHASE_RETURN_EXCEL + "?supplier_id=" + id
             )
-            .then((response) => {
-                window.open(
-                    response.data.data.purchase_return_excel_url,
-                    "_blank"
-                );
+            .then(async (response) => {
+                await downloadProtectedFile(response.data.data.purchase_return_excel_url);
             })
             .catch(({ response }) => {
                 dispatch(

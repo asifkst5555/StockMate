@@ -178,7 +178,12 @@ const PaymentButton = (props) => {
         return formValue;
     };
 
-    const onConfirmHoldList = () => {
+    const isHoldingRef = React.useRef(false);
+
+    const onConfirmHoldList = async () => {
+        if (isHoldingRef.current) {
+            return;
+        }
         if (!holdListId.referenceNumber) {
             dispatch(
                 addToast({
@@ -186,21 +191,29 @@ const PaymentButton = (props) => {
                     type: toastType.ERROR,
                 })
             );
-        } else {
+            return;
+        }
+
+        isHoldingRef.current = true;
+        try {
             const datalist = prepareFormData();
-            dispatch(addHoldList(datalist));
-            setIsHold(false);
-            setUpdateProducts([]);
-            setCartItemValue({
-                discount_type: discountType.FIXED,
-                discount_value: 0,
-                discount: 0,
-                tax: 0,
-                shipping: 0,
-            });
-            setTimeout(() => {
-                setUpdateHoldList(true);
-            },500)
+            const succeeded = await dispatch(addHoldList(datalist));
+            if (succeeded) {
+                setIsHold(false);
+                setUpdateProducts([]);
+                setCartItemValue({
+                    discount_type: discountType.FIXED,
+                    discount_value: 0,
+                    discount: 0,
+                    tax: 0,
+                    shipping: 0,
+                });
+                setTimeout(() => {
+                    setUpdateHoldList(true);
+                }, 500);
+            }
+        } finally {
+            isHoldingRef.current = false;
         }
     };
 

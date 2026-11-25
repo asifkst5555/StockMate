@@ -2,136 +2,197 @@
 
 namespace App\Http\Controllers;
 
-use Exception;
+use App\Models\PaymentIntent;
 use App\Models\Plan;
-use Illuminate\Http\Request;
 use App\Models\SadminSetting;
 use App\Models\Subscription;
-use App\Models\Transaction;
-use App\Models\User;
-use Illuminate\Support\Facades\Auth;
 use App\Repositories\SubscriptionRepository;
-use Illuminate\Support\Facades\DB;
+use App\Services\PaymentIntentService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 use Yabacon\Paystack;
 
 class PaystackPaymentController extends AppBaseController
 {
-    /** @var SubscriptionRepository $subscriptionRepository */
-    private $subscriptionRepository;
+    private SubscriptionRepository $subscriptionRepository;
+    private PaymentIntentService $paymentIntentService;
 
-    public function __construct(SubscriptionRepository $subscriptionRepository)
-    {
+    public function __construct(
+        SubscriptionRepository $subscriptionRepository,
+        ?PaymentIntentService $paymentIntentService = null
+    ) {
         $this->subscriptionRepository = $subscriptionRepository;
+        $this->paymentIntentService = $paymentIntentService ?? new PaymentIntentService($subscriptionRepository);
+    }
+
+    /**
+     * Resolve Paystack secret from SadminSetting with accurate fallback to config/services.php.
+     */
+    private function resolvePaystackSecret(): string
+    {
+        $sadminSetting = SadminSetting::whereIn('key', ['paystack_key', 'paystack_secret'])
+            ->pluck('value', 'key')
+            ->toArray();
+
+        return ! empty($sadminSetting['paystack_secret'])
+            ? (string) $sadminSetting['paystack_secret']
+            : (string) config('services.paystack.secret', '');
+    }
+
+    protected function initializePaystackTransaction(string $paystackSecret, array $payload)
+    {
+        $paystack = new Paystack($paystackSecret);
+
+        return $paystack->transaction->initialize($payload);
+    }
+
+    protected function verifyPaystackTransaction(string $paystackSecret, string $reference)
+    {
+        $paystack = new Paystack($paystackSecret);
+
+        return $paystack->transaction->verify([
+            'reference' => $reference,
+        ]);
     }
 
     public function generateSession(Request $request)
     {
         $input = $request->validate([
-            'plan_id' => 'required',
-            'amount' => 'required',
+            'plan_id' => 'required|integer|exists:plans,id',
+            'amount' => 'nullable|numeric|gt:0',
+            'stores' => 'nullable|array',
+            'stores.*' => 'integer',
         ]);
 
-        $plan = Plan::findorfail($input['plan_id']);
-        $amount = $input['amount'] * 100;
+        $plan = Plan::with('currency')->findOrFail($input['plan_id']);
+        $paystackSecret = $this->resolvePaystackSecret();
 
-        $sadminSetting = SadminSetting::whereIn('key', ['paystack_key', 'paystack_secret'])->pluck('value', 'key')->toArray();
-
-        $paystackPublic = !empty($sadminSetting['paystack_key']) ? $sadminSetting['paystack_key'] : '';
-        $paystackSecret = !empty($sadminSetting['paystack_secret']) ? $sadminSetting['paystack_secret'] : '';
-
-        $user = Auth::user();
+        if ($paystackSecret === '') {
+            return $this->sendError('Paystack Secret is not set', 422);
+        }
 
         try {
+            $intent = $this->paymentIntentService->createIntent(
+                Auth::user(),
+                $plan,
+                Subscription::TYPE_PAYSTACK,
+                $request->stores ?? null,
+                'paystack'
+            );
+        } catch (UnprocessableEntityHttpException $e) {
+            return $this->sendError($e->getMessage(), 422);
+        }
 
-            $paystack = new Paystack($paystackSecret);
+        // Bind Paystack transaction reference directly to server-side PaymentIntent reference
+        $this->paymentIntentService->attachProviderReference($intent, $intent->reference);
 
-            $reference = 'paystack_' . bin2hex(random_bytes(6));
-
-            $tranx = $paystack->transaction->initialize([
-                'email' => $user->email,
-                'amount' => $amount,
-                'reference' => $reference,
+        try {
+            $tranx = $this->initializePaystackTransaction($paystackSecret, [
+                'email' => Auth::user()->email,
+                'amount' => $intent->amount_minor,
+                'currency' => $intent->currency,
+                'reference' => $intent->reference,
                 'callback_url' => route('paystack-success'),
                 'metadata' => [
-                    'user_id' => $user->id,
-                    'plan_id' => $plan->id,
-                    'amount' => $amount,
+                    'intent_ref' => $intent->reference,
+                    'user_id' => $intent->user_id,
+                    'plan_id' => $intent->plan_id,
                     'referrer' => url()->previous(),
-                    'stores' => $request->get('stores'),
                 ],
             ]);
 
+            $authUrl = $tranx->data->authorization_url ?? null;
+            if (empty($authUrl)) {
+                $this->paymentIntentService->markTerminalFailure($intent, PaymentIntent::STATUS_FAILED);
 
-            return $this->sendResponse(['url' => $tranx->data->authorization_url], 'Paystack payment link generated successfully.');
-        } catch (Exception $e) {
-            return $this->sendError($e->getMessage());
+                return $this->sendError('Unable to initialize Paystack payment session.', 422);
+            }
+
+            return $this->sendResponse(['url' => $authUrl], 'Paystack payment link generated successfully.');
+        } catch (\Throwable $e) {
+            $this->paymentIntentService->markTerminalFailure($intent, PaymentIntent::STATUS_FAILED);
+            Log::error('Paystack transaction initialization failed.', [
+                'intent_ref' => $intent->reference,
+                'user_id' => $intent->user_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->sendError('Unable to initialize Paystack payment session.', 422);
         }
     }
 
     public function paymentSuccess(Request $request)
     {
         $reference = $request->query('reference');
-        if (empty($reference)) {
+        if (empty($reference) || ! is_string($reference)) {
             return redirect('/app/user/payment-failed?status=false');
         }
 
-        $sadminSetting = SadminSetting::whereIn('key', ['paystack_key', 'paystack_secret'])->pluck('value', 'key')->toArray();
-        $paystackSecret = $sadminSetting['paystack_secret'] ?? config('paystack.secretKey');
+        $paystackSecret = $this->resolvePaystackSecret();
+        if ($paystackSecret === '') {
+            return redirect('/app/user/payment-failed?status=false');
+        }
+
         try {
-            DB::beginTransaction();
+            $tranx = $this->verifyPaystackTransaction($paystackSecret, $reference);
+            $data = $tranx->data ?? null;
 
-            $paystack = new Paystack($paystackSecret);
-
-            $tranx = $paystack->transaction->verify([
-                'reference' => $reference,
-            ]);
-            if (!$tranx->status || $tranx->data->status !== 'success') {
+            if (empty($tranx->status) || ! is_object($data) || strtolower((string) ($data->status ?? '')) !== 'success') {
                 return redirect('/app/user/payment-failed?status=false');
             }
 
-            $metaData = (array) $tranx->data->metadata ?? [];
-
-            $user = User::findorfail($metaData['user_id']);
-
-            $transaction = Transaction::create([
-                'tenant_id' => $user->tenant_id,
-                'transaction_id' => $tranx->data->id,
-                'amount' => $metaData['amount'] / 100,
-                'type' => Subscription::TYPE_PAYSTACK,
-                'status' => Transaction::PAID,
-                'user_id' => $user->id,
-                'meta' => json_encode($tranx->data),
-            ]);
-
-            $stores = $metaData['stores'] ?? null;
-
-            if (!empty($stores)) {
-                if (is_string($stores)) {
-                    $decoded = json_decode($stores, true);
-                    $stores = is_array($decoded) ? $decoded : null;
-                }
-                if (is_array($stores)) {
-                    $stores = array_filter($stores, fn($item) => !empty($item));
-                    $stores = empty($stores) ? null : array_values($stores);
-                }
+            // Verify returned reference matches requested reference
+            $returnedRef = (string) ($data->reference ?? '');
+            if ($returnedRef !== '' && $returnedRef !== $reference) {
+                return redirect('/app/user/payment-failed?status=false');
             }
 
-            $this->subscriptionRepository->createSubscription([
-                'plan_id' => $metaData['plan_id'],
-                'user_id' => $metaData['user_id'],
-                'stores' => $stores ?? null,
-                'payment_type' => Subscription::TYPE_PAYSTACK,
-                'transaction_id' => $transaction->id,
+            $providerTxId = (string) ($data->id ?? $reference);
+            if ($providerTxId === '') {
+                return redirect('/app/user/payment-failed?status=false');
+            }
+
+            $metaData = (array) ($data->metadata ?? []);
+            $intentRef = (string) ($metaData['intent_ref'] ?? $reference);
+
+            $intent = $this->paymentIntentService->findForGateway(
+                Subscription::TYPE_PAYSTACK,
+                $reference,
+                $intentRef !== '' ? $intentRef : null
+            );
+
+            if (! $intent) {
+                Log::warning('Paystack callback rejected: no matching server PaymentIntent.', ['reference' => $reference]);
+
+                return redirect('/app/user/payment-failed?status=false');
+            }
+
+            $metaUserId = isset($metaData['user_id']) ? (int) $metaData['user_id'] : null;
+            $metaPlanId = isset($metaData['plan_id']) ? (int) $metaData['plan_id'] : null;
+            $actualAmountMinor = (int) ($data->amount ?? 0);
+            $actualCurrency = (string) ($data->currency ?? '');
+
+            $this->paymentIntentService->settleIntent(
+                $intent,
+                $providerTxId,
+                $actualAmountMinor,
+                $actualCurrency,
+                (array) $data,
+                $metaUserId,
+                $metaPlanId,
+                'paystack'
+            );
+
+            return redirect('/app/user/payment-success?status=true');
+        } catch (\Throwable $e) {
+            Log::warning('Paystack callback verification failed.', [
+                'reference' => $reference,
+                'error' => $e->getMessage(),
             ]);
 
-            DB::commit();
-
-            // Payment success redirect url
-            return redirect('/app/user/payment-success?status=true');
-        } catch (Exception $e) {
-            DB::rollBack();
-            throw new UnprocessableEntityHttpException($e->getMessage());
+            return redirect('/app/user/payment-failed?status=false');
         }
     }
 }

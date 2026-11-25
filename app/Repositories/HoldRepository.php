@@ -102,6 +102,9 @@ class HoldRepository extends BaseRepository
             DB::commit();
 
             return $hold;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
@@ -221,7 +224,9 @@ class HoldRepository extends BaseRepository
                     'quantity',
                     'sub_total',
                 ]);
-                $this->updateItem($holdItemArray, $input['warehouse_id']);
+                if (! is_null($holdItem['hold_item_id'])) {
+                    $this->updateItem($holdItemArray, $input['warehouse_id'], $hold);
+                }
                 //create new product items
                 if (is_null($holdItem['hold_item_id'])) {
                     $holdItem = $this->calculationHoldItems($holdItem);
@@ -251,23 +256,33 @@ class HoldRepository extends BaseRepository
             DB::commit();
 
             return $hold;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
         }
     }
 
-    public function updateItem($holdItem, $warehouseId): bool
+    public function updateItem($holdItem, $warehouseId, ?Hold $hold = null): bool
     {
         try {
             $holdItem = $this->calculationHoldItems($holdItem);
 
-            $item = HoldItem::whereId($holdItem['hold_item_id']);
+            $item = $hold
+                ? $hold->holdItems()->whereKey($holdItem['hold_item_id'])->first()
+                : HoldItem::whereKey($holdItem['hold_item_id'])->whereHas('hold')->first();
+            if (! $item) {
+                throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException('Hold item not found.');
+            }
 
-            unset($holdItem['hold_item_id']);
+            unset($holdItem['hold_item_id'], $holdItem['hold_id']);
             $item->update($holdItem);
 
             return true;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            throw $e;
         } catch (Exception $e) {
             throw new UnprocessableEntityHttpException($e->getMessage());
         }

@@ -10,7 +10,7 @@ import { fetchPurchaseReturn } from '../../store/action/purchaseReturnAction';
 import { getFormattedMessage, getFormattedOptions } from '../../shared/sharedMethod';
 import { editPurchaseReturnArray } from './editPurchaseReturnArray';
 import TopProgressBar from "../../shared/components/loaders/TopProgressBar";
-import { saleStatusOptions } from '../../constants';
+import { saleReturnStatusOptions } from '../../constants';
 
 const EditPurchaseReturn = ( props ) => {
     const { fetchPurchaseReturn, purchaseReturn, warehouses, fetchAllSuppliers, suppliers, fetchAllWarehouses } = props;
@@ -29,8 +29,10 @@ const EditPurchaseReturn = ( props ) => {
     const warehouse = warehouses.filter( ( warehouse ) => warehouse.id === warehouseId );
     const warehouseName = warehouse[ 0 ] && warehouse[ 0 ].attributes && warehouse[ 0 ].attributes.name
 
-    const statusFilterOptions = getFormattedOptions( saleStatusOptions )
-    const statusDefaultValue = purchaseReturn && purchaseReturn.attributes && purchaseReturn.attributes.status && statusFilterOptions.filter( ( item ) => item.id === purchaseReturn.attributes.status )
+    const statusFilterOptions = getFormattedOptions( saleReturnStatusOptions )
+    const matchedStatus = statusFilterOptions.find(
+        ( item ) => Number( item.id ) === Number( purchaseReturn?.attributes?.status )
+    ) || statusFilterOptions[ 0 ];
 
     const itemsValue = purchaseReturn && purchaseReturn.attributes && {
         date: purchaseReturn.attributes.date,
@@ -49,10 +51,10 @@ const EditPurchaseReturn = ( props ) => {
         purchase_return_items: editPurchaseReturnArray( purchaseReturn.attributes.purchase_return_items, purchaseReturn.attributes.warehouse_id ),
         newItem: '',
         id: purchaseReturn.id,
-        status_id: {
-            label: statusDefaultValue[ 0 ] && statusDefaultValue[ 0 ].name,
-            value: statusDefaultValue[ 0 ] && statusDefaultValue[ 0 ].id
-        }
+        status_id: matchedStatus ? {
+            label: matchedStatus.name,
+            value: matchedStatus.id
+        } : null
     };
     return (
         <MasterLayout>

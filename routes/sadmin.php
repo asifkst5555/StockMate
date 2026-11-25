@@ -10,6 +10,7 @@ use App\Http\Controllers\Sadmin\FaqAPIController;
 use App\Http\Controllers\Sadmin\FeatureAPIController;
 use App\Http\Controllers\Sadmin\FrontCMSAPIController;
 use App\Http\Controllers\Sadmin\PartnerAPIController;
+use App\Http\Controllers\Sadmin\PaymentOperationsAPIController;
 use App\Http\Controllers\Sadmin\PlanAPIController;
 use App\Http\Controllers\Sadmin\SadminSettingAPIController;
 use App\Http\Controllers\Sadmin\StepAPIController;
@@ -82,6 +83,12 @@ Route::middleware(['auth:sanctum', 'role:superadmin', 'verified', 'active_user']
     Route::get('subscriptions/{subscription}', [SubscriptionAPIController::class, 'show'])->name('subscriptions.show');
     Route::post('subscriptions/{subscription}/status', [SubscriptionAPIController::class, 'updateStatus']);
     Route::post('subscriptions/{subscription}/update', [SubscriptionAPIController::class, 'endDateUpdate']);
+
+    // Payment Operational Review & Auditable Recovery (Super Admin only)
+    Route::get('payment-operations/review-queue', [PaymentOperationsAPIController::class, 'reviewQueue']);
+    Route::post('payment-operations/webhooks/{webhookEvent}/requeue', [PaymentOperationsAPIController::class, 'requeueWebhook']);
+    Route::post('payment-operations/reconciliations/{reconciliation}/resolve', [PaymentOperationsAPIController::class, 'resolveReconciliation']);
+    Route::post('payment-operations/lifecycle-events/{lifecycleEvent}/review', [PaymentOperationsAPIController::class, 'markLifecycleReviewed']);
 
     // Front CMS
     Route::get('hero-section', [FrontCMSAPIController::class, 'getHeroSection']);

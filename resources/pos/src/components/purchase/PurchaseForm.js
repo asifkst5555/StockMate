@@ -40,7 +40,7 @@ const PurchaseForm = ( props ) => {
     const [ newTax, setNewTax ] = useState( '' );
     const [ newPurchaseUnit, setNewPurchaseUnit ] = useState( '' );
     const [ subTotal, setSubTotal ] = useState( '' );
-    const [ updateProducts, setUpdateProducts ] = useState( [] );
+    const [ updateProducts, setUpdateProducts ] = useState( singlePurchase ? singlePurchase.purchase_items || [] : [] );
     const [ quantity, setQuantity ] = useState( 0 );
     const [purchaseValueUpdated, setPurchaseValueUpdated] = useState(false);
     const [ purchaseValue, setPurchaseValue ] = useState( {
@@ -110,8 +110,10 @@ const PurchaseForm = ( props ) => {
         let errorss = {};
         let isValid = false;
         const qtyCart = updateProducts.filter( ( a ) => a.quantity === 0 );
+        const productIds = updateProducts.map( ( a ) => a.product_id || a.id ).filter( Boolean );
+        const hasDuplicateProducts = new Set( productIds ).size !== productIds.length;
         if ( !purchaseValue.date ) {
-            error[ 'date' ] = getFormattedMessage( 'globally.date.validate.label' );
+            errorss[ 'date' ] = getFormattedMessage( 'globally.date.validate.label' );
         } else if ( !purchaseValue.warehouse_id ) {
             errorss[ 'warehouse_id' ] = getFormattedMessage( 'product.input.warehouse.validate.label' )
         } else if ( !purchaseValue.supplier_id ) {
@@ -119,6 +121,11 @@ const PurchaseForm = ( props ) => {
         } else if ( qtyCart.length > 0 ) {
             dispatch( addToast( {
                 text: getFormattedMessage( 'globally.product-quantity.validate.message' ),
+                type: toastType.ERROR
+            } ) )
+        } else if ( hasDuplicateProducts ) {
+            dispatch( addToast( {
+                text: getFormattedMessage( 'globally.product-already-added.validate.message' ) || 'This product has already been added to the purchase list.',
                 type: toastType.ERROR
             } ) )
         } else if ( updateProducts.length < 1 ) {
@@ -352,7 +359,7 @@ const PurchaseForm = ( props ) => {
                             </thead>
                             <tbody>
                                 {updateProducts && updateProducts.map( ( singleProduct, index ) => {
-                                    return <PurchaseTable singleProduct={singleProduct} index={index}
+                                    return <PurchaseTable key={singleProduct.id ? `${singleProduct.id}_${index}` : index} singleProduct={singleProduct} index={index}
                                         updateQty={updatedQty}
                                         updateCost={updateCost} updateDiscount={updateDiscount}
                                         updateProducts={updateProducts}

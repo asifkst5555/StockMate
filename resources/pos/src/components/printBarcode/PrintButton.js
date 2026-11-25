@@ -36,7 +36,7 @@ class PrintButton extends React.PureComponent {
                     indents.push(
                         <div
                             key={i}
-                            className="thermal-barcode-item"
+                            className="thermal-barcode-item thermal-barcode-item--custom"
                             style={{
                                 width: `${widthInInches}in`,
                                 height: `${heightInInches}in`,
@@ -171,16 +171,16 @@ class PrintButton extends React.PureComponent {
             const heightInInches = (heightInMm * 0.0393701).toFixed(3);
 
             return (
-                <div className="thermal-print-container">
+                <div className="thermal-print-container thermal-print-container--custom">
                     <style>
                         {`
                             @media print {
-                                .thermal-print-container {
+                                .thermal-print-container--custom {
                                     margin: 0 !important;
                                     padding: 0 !important;
                                     background: white !important;
                                 }
-                                .thermal-barcode-item {
+                                .thermal-barcode-item.thermal-barcode-item--custom {
                                     width: ${widthInInches}in !important;
                                     height: ${heightInInches}in !important;
                                     margin: 0 !important;
@@ -193,26 +193,28 @@ class PrintButton extends React.PureComponent {
                                     float: none !important;
                                     page-break-after: always;
                                 }
-                                .thermal-barcode-item:last-child {
+                                .thermal-barcode-item.thermal-barcode-item--custom:last-child {
                                     page-break-after: auto !important;
                                 }
-                                .thermal-barcode-content {
+                                .thermal-print-container--custom .thermal-barcode-content {
                                     background: #ffffff !important;
                                 }
-                                .thermal-company-name {
+                                .thermal-print-container--custom .thermal-company-name {
                                     font-size: 8pt !important;
                                 }
-                                .thermal-product-name {
+                                .thermal-print-container--custom .thermal-product-name {
                                     font-size: 7pt !important;
                                 }
-                                .thermal-price {
+                                .thermal-print-container--custom .thermal-price {
                                     font-size: 6pt !important;
                                 }
-                                .thermal-barcode-img {
+                                .thermal-print-container--custom .thermal-barcode-img {
                                     max-width: ${(widthInMm * 0.0393701 * 0.9).toFixed(3)}in !important;
                                     max-height: ${(heightInMm * 0.0393701 * 0.4).toFixed(3)}in !important;
+                                    image-rendering: pixelated;
+                                    image-rendering: crisp-edges;
                                 }
-                                .thermal-barcode-code {
+                                .thermal-print-container--custom .thermal-barcode-code {
                                     font-size: 7pt !important;
                                 }
                                 @page {

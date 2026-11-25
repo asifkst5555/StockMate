@@ -85,15 +85,17 @@ class WarehouseAPIController extends AppBaseController
 
     public function destroy($id): JsonResponse
     {
-        if (getSettingValue('default_warehouse') == $id) {
+        $warehouse = \App\Models\Warehouse::whereKey($id)->firstOrFail();
+
+        if (getSettingValue('default_warehouse') == $warehouse->id) {
             return $this->SendError(__('messages.error.default_warehouse_cant_delete'));
         }
 
-        $useWarehouse = $this->warehouseRepository->warehouseCanDelete($id);
+        $useWarehouse = $this->warehouseRepository->warehouseCanDelete($warehouse->id);
         if ($useWarehouse) {
             return $this->sendError(__('messages.error.warehouse_cant_delete'));
         }
-        $this->warehouseRepository->delete($id);
+        $this->warehouseRepository->delete($warehouse->id);
 
         return $this->sendSuccess('Warehouse deleted successfully');
     }

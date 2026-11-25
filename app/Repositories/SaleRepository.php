@@ -114,37 +114,34 @@ class SaleRepository extends BaseRepository
             $this->generateBarcode($reference_code);
             $sale['barcode_image_url'] = Storage::url('sales/barcode-' . $reference_code . '.png');
 
+            /** @var \App\Services\StockMovementService $stockService */
+            $stockService = app(\App\Services\StockMovementService::class);
+
+            $pairs = [];
             foreach ($input['sale_items'] as $saleItem) {
-                if (($saleItem['quantity'] ?? 0) <= 0) {
-                    throw new UnprocessableEntityHttpException('Quantity must be greater than zero.');
-                }
-                $warehouseId = $saleItem['warehouse_id'] ?? $saleInputArray['warehouse_id'];
-                $product = ManageStock::whereWarehouseId($warehouseId)
-                    ->whereProductId($saleItem['product_id'])
-                    ->lockForUpdate()
-                    ->first();
+                $stockService->assertPositiveQuantity($saleItem['quantity'] ?? null, 'Quantity must be greater than zero.');
+                $warehouseId = (int) ($saleItem['warehouse_id'] ?? $saleInputArray['warehouse_id']);
+                $pairs[] = ['warehouse_id' => $warehouseId, 'product_id' => (int) $saleItem['product_id']];
+            }
+            $stockService->lockStockRows($pairs);
 
-                if ($product && $product->quantity >= $saleItem['quantity']) {
-                    $beforeQty = (float) $product->quantity;
-                    $totalQuantity = $beforeQty - (float) $saleItem['quantity'];
-                    $product->update([
-                        'quantity' => $totalQuantity,
-                    ]);
-
-                    recordStockMovement(
-                        (int) $warehouseId,
-                        (int) $saleItem['product_id'],
-                        'sale',
-                        -(float) $saleItem['quantity'],
-                        $beforeQty,
-                        $totalQuantity,
-                        Sale::class,
-                        $sale->id,
-                        isset($saleItem['product_price']) ? (float) $saleItem['product_price'] : null
-                    );
-                } else {
-                    throw new UnprocessableEntityHttpException('Quantity must be less than Available quantity.');
+            foreach ($input['sale_items'] as $saleItem) {
+                $qty = $stockService->assertPositiveQuantity($saleItem['quantity'] ?? null, 'Quantity must be greater than zero.');
+                $warehouseId = (int) ($saleItem['warehouse_id'] ?? $saleInputArray['warehouse_id']);
+                $productModel = Product::whereKey($saleItem['product_id'])->first();
+                if ($productModel) {
+                    $stockService->assertSupportedUnitParity($productModel, $saleItem['sale_unit'] ?? null, 'sale');
                 }
+
+                $stockService->decrease(
+                    $warehouseId,
+                    (int) $saleItem['product_id'],
+                    $qty,
+                    'sale',
+                    Sale::class,
+                    (int) $sale->id,
+                    $productModel ? (float) $productModel->product_cost : null
+                );
             }
 
             DB::commit();
@@ -227,14 +224,87 @@ class SaleRepository extends BaseRepository
     }
 
     /**
+     * Determine whether the authenticated user holds explicit permission to override catalog product prices (C1.5).
+     *
+     * Store Admins hold `manage_products` through their role permissions; sub-users without `manage_products`
+     * are denied price overrides. Super Admin remains exempt.
+     */
+    private function canOverrideProductPrice(): bool
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasRole(\App\Models\Role::SUPER_ADMIN)) {
+            return true;
+        }
+
+        return $user->can('manage_products');
+    }
+
+    /**
+     * Resolve a product strictly within the active tenant scope (fail-closed if tenant context is missing).
+     */
+    private function resolveTenantScopedProduct(int $productId, ?Product $product = null): Product
+    {
+        $user = Auth::user();
+        $isSuperAdmin = $user && $user->hasRole(\App\Models\Role::SUPER_ADMIN);
+        $activeTenantId = $user?->tenant_id;
+
+        if (! $isSuperAdmin && empty($activeTenantId)) {
+            throw new UnprocessableEntityHttpException('Active tenant context is required to resolve product pricing.');
+        }
+
+        if ($product) {
+            if ((int) $product->id !== $productId) {
+                $product = null;
+            } elseif (! $isSuperAdmin && (string) $product->tenant_id !== (string) $activeTenantId) {
+                throw new UnprocessableEntityHttpException('Product not found or does not belong to the active store.');
+            }
+        }
+
+        if (! $product) {
+            $query = Product::whereKey($productId);
+            if (! $isSuperAdmin) {
+                $query->where('tenant_id', $activeTenantId);
+            }
+            $product = $query->first();
+        }
+
+        if (! $product) {
+            throw new UnprocessableEntityHttpException('Product not found or does not belong to the active store.');
+        }
+
+        return $product;
+    }
+
+    /**
      * @return mixed
      */
-    public function calculationSaleItems($saleItem)
+    public function calculationSaleItems($saleItem, ?Product $product = null)
     {
         $validator = Validator::make($saleItem, SaleItem::$rules);
         if ($validator->fails()) {
             throw new UnprocessableEntityHttpException($validator->errors()->first());
         }
+
+        // C1.5: Enforce explicit tenant-scoped product ownership & server-side product_price validation
+        $product = $this->resolveTenantScopedProduct((int) $saleItem['product_id'], $product);
+
+        $catalogPrice = (float) $product->product_price;
+        $hasSubmittedPrice = isset($saleItem['product_price']) && $saleItem['product_price'] !== '' && $saleItem['product_price'] !== null;
+        $submittedPrice = $hasSubmittedPrice ? (float) $saleItem['product_price'] : $catalogPrice;
+
+        if ($submittedPrice < 0) {
+            throw new UnprocessableEntityHttpException('Product price cannot be negative.');
+        }
+
+        if (abs($submittedPrice - $catalogPrice) > 0.0001 && ! $this->canOverrideProductPrice()) {
+            throw new UnprocessableEntityHttpException('Unauthorized product price override.');
+        }
+
+        $saleItem['product_price'] = $submittedPrice;
 
         //discount calculation
         $perItemDiscountAmount = 0;
@@ -282,20 +352,24 @@ class SaleRepository extends BaseRepository
     public function storeSaleItems($sale, $input)
     {
         foreach ($input['sale_items'] as $saleItem) {
-            $product = Product::whereId($saleItem['product_id'])->first();
+            $product = $this->resolveTenantScopedProduct((int) $saleItem['product_id']);
 
-            if (! empty($product) && isset($product->quantity_limit) && $saleItem['quantity'] > $product->quantity_limit) {
+            if (isset($product->quantity_limit) && $saleItem['quantity'] > $product->quantity_limit) {
                 throw new UnprocessableEntityHttpException('Please enter less than ' . $product->quantity_limit . ' quantity of ' . $product->name . ' product.');
             }
-            $item = $this->calculationSaleItems($saleItem);
+            $item = $this->calculationSaleItems($saleItem, $product);
             $saleItem = new SaleItem($item);
             $sale->saleItems()->save($saleItem);
         }
 
         $subTotalAmount = $sale->saleItems()->sum('sub_total');
 
-        if ($input['discount'] <= $subTotalAmount) {
-            $input['grand_total'] = $subTotalAmount - $input['discount'];
+        $orderDiscount = (float) ($input['discount'] ?? 0);
+        if ($orderDiscount < 0) {
+            throw new UnprocessableEntityHttpException('Discount amount cannot be negative.');
+        }
+        if ($orderDiscount <= $subTotalAmount) {
+            $input['grand_total'] = $subTotalAmount - $orderDiscount;
         } else {
             throw new UnprocessableEntityHttpException('Discount amount should not be greater than total.');
         }
@@ -356,18 +430,24 @@ class SaleRepository extends BaseRepository
     {
         try {
             DB::beginTransaction();
-            $sale = Sale::findOrFail($id);
-            $saleItemIds = SaleItem::whereSaleId($id)->pluck('id')->toArray();
+            $sale = Sale::whereKey($id)->lockForUpdate()->firstOrFail();
+            /** @var \App\Services\StockMovementService $stockService */
+            $stockService = app(\App\Services\StockMovementService::class);
+            $saleItemIds = $sale->saleItems()->pluck('id')->toArray();
             $saleItmOldIds = [];
             foreach ($input['sale_items'] as $key => $saleItem) {
+                $stockService->assertPositiveQuantity($saleItem['quantity'] ?? null, 'Quantity must be greater than zero.');
                 $product = Product::whereId($saleItem['product_id'])->first();
+                if ($product) {
+                    $stockService->assertSupportedUnitParity($product, $saleItem['sale_unit'] ?? null, 'sale');
+                }
 
                 if (! empty($product) && isset($product->quantity_limit) && $saleItem['quantity'] > $product->quantity_limit) {
                     throw new UnprocessableEntityHttpException('Please enter less than ' . $product->quantity_limit . ' quantity of ' . $product->name . ' product.');
                 }
 
                 //get different ids & update
-                $saleItmOldIds[$key] = $saleItem['sale_item_id'];
+                $saleItmOldIds[$key] = $saleItem['sale_item_id'] ?? null;
                 $saleItemArray = Arr::only($saleItem, [
                     'sale_item_id',
                     'product_id',
@@ -383,9 +463,11 @@ class SaleRepository extends BaseRepository
                     'quantity',
                     'sub_total',
                 ]);
-                $this->updateItem($saleItemArray, $input['warehouse_id']);
+                if (! is_null($saleItemArray['sale_item_id'] ?? null)) {
+                    $this->updateItem($saleItemArray, $input['warehouse_id'], $sale);
+                }
                 //create new product items
-                if (is_null($saleItem['sale_item_id'])) {
+                if (is_null($saleItemArray['sale_item_id'] ?? null)) {
                     $saleItem = $this->calculationSaleItems($saleItem);
                     $saleItemArray = Arr::only($saleItem, [
                         'product_id',
@@ -402,16 +484,15 @@ class SaleRepository extends BaseRepository
                         'sub_total',
                     ]);
                     $sale->saleItems()->create($saleItemArray);
-                    $product = ManageStock::whereWarehouseId($input['warehouse_id'])->whereProductId($saleItem['product_id'])->first();
-                    if ($product) {
-                        if ($product->quantity >= $saleItem['quantity']) {
-                            $product->update([
-                                'quantity' => $product->quantity - $saleItem['quantity'],
-                            ]);
-                        } else {
-                            throw new UnprocessableEntityHttpException('Quantity must be less than Available quantity.');
-                        }
-                    }
+                    $stockService->decrease(
+                        (int) $input['warehouse_id'],
+                        (int) $saleItem['product_id'],
+                        (float) $saleItem['quantity'],
+                        'sale_update_add',
+                        Sale::class,
+                        (int) $sale->id,
+                        $product ? (float) $product->product_cost : null
+                    );
                 }
             }
             $removeItemIds = array_diff($saleItemIds, $saleItmOldIds);
@@ -419,23 +500,22 @@ class SaleRepository extends BaseRepository
             if (! empty(array_values($removeItemIds))) {
                 foreach ($removeItemIds as $removeItemId) {
                     // remove quantity manage storage
-                    $oldProduct = SaleItem::whereId($removeItemId)->first();
-                    $productQuantity = ManageStock::whereWarehouseId($input['warehouse_id'])->whereProductId($oldProduct->product_id)->first();
-                    if ($productQuantity) {
-                        if ($oldProduct) {
-                            $productQuantity->update([
-                                'quantity' => $productQuantity->quantity + $oldProduct->quantity,
-                            ]);
-                        }
-                    } else {
-                        ManageStock::create([
-                            'warehouse_id' => $input['warehouse_id'],
-                            'product_id' => $oldProduct->product_id,
-                            'quantity' => $oldProduct->quantity,
-                        ]);
+                    $oldProduct = $sale->saleItems()->whereKey($removeItemId)->first();
+                    if (! $oldProduct) {
+                        continue;
                     }
+                    $stockService->reverse(
+                        (int) $input['warehouse_id'],
+                        (int) $oldProduct->product_id,
+                        (float) $oldProduct->quantity,
+                        'sale_update_reversal',
+                        Sale::class,
+                        (int) $sale->id,
+                        null,
+                        'Sale item removed (' . ($sale->reference_code ?? ('#' . $sale->id)) . ')'
+                    );
                 }
-                SaleItem::whereIn('id', array_values($removeItemIds))->delete();
+                $sale->saleItems()->whereIn('id', array_values($removeItemIds))->delete();
             }
             $this->generateBarcode($sale->reference_code);
             $sale['barcode_image_url'] = Storage::url('sales/barcode-' . $sale->reference_code . '.png');
@@ -443,48 +523,47 @@ class SaleRepository extends BaseRepository
             DB::commit();
 
             return $sale;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
         }
     }
 
-    public function updateItem($saleItem, $warehouseId): bool
+    public function updateItem($saleItem, $warehouseId, ?Sale $sale = null): bool
     {
         try {
             $saleItem = $this->calculationSaleItems($saleItem);
-            $item = SaleItem::whereId($saleItem['sale_item_id']);
-            $product = ManageStock::whereWarehouseId($warehouseId)->whereProductId($saleItem['product_id'])->first();
-            $oldItem = SaleItem::whereId($saleItem['sale_item_id'])->first();
-            if ($oldItem && $oldItem->quantity != $saleItem['quantity']) {
-                $totalQuantity = 0;
-                if ($oldItem->quantity > $saleItem['quantity']) {
-                    if ($product) {
-                        $totalQuantity = $product->quantity + ($oldItem->quantity - $saleItem['quantity']);
-                        $product->update([
-                            'quantity' => $totalQuantity,
-                        ]);
-                    } else {
-                        ManageStock::create([
-                            'warehouse_id' => $warehouseId,
-                            'product_id' => $saleItem['product_id'],
-                            'quantity' => $totalQuantity,
-                        ]);
-                    }
-                } elseif ($oldItem->quantity < $saleItem['quantity']) {
-                    $totalQuantity = $product->quantity - ($saleItem['quantity'] - $oldItem->quantity);
-                    if ($product->quantity < ($saleItem['quantity'] - $oldItem->quantity)) {
-                        throw new UnprocessableEntityHttpException('Quantity must be less than Available quantity.');
-                    }
-                    $product->update([
-                        'quantity' => $totalQuantity,
-                    ]);
-                }
+            // SEC-A2: Resolve SaleItem strictly through the authorized parent Sale
+            $oldItem = $sale
+                ? $sale->saleItems()->whereKey($saleItem['sale_item_id'])->first()
+                : SaleItem::whereKey($saleItem['sale_item_id'])->whereHas('sale')->first();
+            if (! $oldItem) {
+                throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException('Sale item not found.');
             }
-            unset($saleItem['sale_item_id']);
-            $item->update($saleItem);
+            /** @var \App\Services\StockMovementService $stockService */
+            $stockService = app(\App\Services\StockMovementService::class);
+            $newQty = $stockService->assertPositiveQuantity($saleItem['quantity'] ?? null, 'Quantity must be greater than zero.');
+            $oldQty = (float) $oldItem->quantity;
+            if ($oldQty != $newQty) {
+                $delta = $oldQty - $newQty; // positive restores stock, negative deducts additional stock
+                $stockService->applyDelta(
+                    (int) $warehouseId,
+                    (int) $saleItem['product_id'],
+                    $delta,
+                    $delta > 0 ? 'sale_update_reversal' : 'sale_update_sub',
+                    Sale::class,
+                    (int) ($sale?->id ?? $oldItem->sale_id)
+                );
+            }
+            unset($saleItem['sale_item_id'], $saleItem['sale_id']);
+            $oldItem->update($saleItem);
 
             return true;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            throw $e;
         } catch (Exception $e) {
             throw new UnprocessableEntityHttpException($e->getMessage());
         }
@@ -498,10 +577,14 @@ class SaleRepository extends BaseRepository
         $sale = Sale::findOrFail($id);
         $subTotalAmount = $sale->saleItems()->sum('sub_total');
 
-        if ($input['discount'] > $subTotalAmount || $input['discount'] < 0) {
+        $orderDiscount = (float) ($input['discount'] ?? 0);
+        if ($orderDiscount < 0) {
+            throw new UnprocessableEntityHttpException('Discount amount cannot be negative.');
+        }
+        if ($orderDiscount > $subTotalAmount) {
             throw new UnprocessableEntityHttpException('Discount amount should not be greater than total.');
         }
-        $input['grand_total'] = $subTotalAmount - $input['discount'];
+        $input['grand_total'] = $subTotalAmount - $orderDiscount;
         if ($input['tax_rate'] > 100 || $input['tax_rate'] < 0) {
             throw new UnprocessableEntityHttpException('Please enter tax value between 0 to 100.');
         }
@@ -531,15 +614,19 @@ class SaleRepository extends BaseRepository
                 $newPaymentIds = [];
                 foreach ($paymentDetails as $paymentDetail) {
                     if (isset($paymentDetail['id']) && !empty($paymentDetail['id'])) {
-                        SalesPayment::whereId($paymentDetail['id'])->update([
-                            'sale_id' => $sale->id,
+                        // SEC-A2: Resolve SalesPayment strictly through parent Sale (never reassign foreign payments)
+                        $existingPayment = $sale->payments()->whereKey($paymentDetail['id'])->first();
+                        if (! $existingPayment) {
+                            throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException('Sales payment not found.');
+                        }
+                        $existingPayment->update([
                             'reference' => $paymentDetail['reference'] ?? null,
                             'payment_date' => $paymentDetail['date'] ?? Carbon::now(),
                             'amount' => $paymentDetail['amount'] ?? 0,
                             'received_amount' => $input['grand_total'] ?? 0,
                             'payment_type' => $paymentDetail['payment_type']['value'] ?? null,
                         ]);
-                        $newPaymentIds[] = $paymentDetail['id'] ?? null;
+                        $newPaymentIds[] = $existingPayment->id;
                     } else {
                         $payment = SalesPayment::create([
                             'sale_id' => $sale->id,

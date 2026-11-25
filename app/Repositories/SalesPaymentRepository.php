@@ -5,7 +5,10 @@ namespace App\Repositories;
 use App\Models\Sale;
 use App\Models\SalesPayment;
 use Exception;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -101,8 +104,8 @@ class SalesPaymentRepository extends BaseRepository
         try {
             DB::beginTransaction();
 
-            $existAmount = SalesPayment::whereSaleId($salesPayment->sale_id)->sum('amount');
-            $sale = Sale::whereId($salesPayment->sale_id)->firstOrFail();
+            $sale = Sale::whereKey($salesPayment->sale_id)->firstOrFail();
+            $existAmount = $sale->payments()->sum('amount');
             $saleAmount = $sale->grand_total;
             $payAmount = $input['amount'];
             $paidAmount = ($existAmount - $salesPayment->amount) + $payAmount;
@@ -113,10 +116,10 @@ class SalesPaymentRepository extends BaseRepository
                 $paymentStatus = Sale::PAID;
             }
 
-            $salesPayment->update($input);
+            $salesPayment->update(Arr::except($input, ['sale_id']));
 
             $sale->update([
-                'payment_type' => SalesPayment::whereSaleId($sale->id)->latest()->first()->payment_type ?? null,
+                'payment_type' => $sale->payments()->latest()->first()->payment_type ?? null,
                 'payment_status' => $paymentStatus,
                 'paid_amount' => $paidAmount,
             ]);
@@ -124,6 +127,9 @@ class SalesPaymentRepository extends BaseRepository
             DB::commit();
 
             return $salesPayment;
+        } catch (ModelNotFoundException|HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());

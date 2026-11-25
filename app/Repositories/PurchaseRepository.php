@@ -92,6 +92,16 @@ class PurchaseRepository extends BaseRepository
                 'status',
             ]);
 
+            /** @var \App\Services\StockMovementService $stockService */
+            $stockService = app(\App\Services\StockMovementService::class);
+            foreach ($input['purchase_items'] as $purchaseItem) {
+                $stockService->assertPositiveQuantity($purchaseItem['quantity'] ?? null, 'Please enter a quantity greater than zero.');
+                $productModel = \App\Models\Product::whereKey($purchaseItem['product_id'] ?? null)->first();
+                if ($productModel) {
+                    $stockService->assertSupportedUnitParity($productModel, $purchaseItem['purchase_unit'] ?? null, 'purchase');
+                }
+            }
+
             /** @var Purchase $purchase */
             $purchase = Purchase::create($purchaseInputArray);
 
@@ -99,14 +109,20 @@ class PurchaseRepository extends BaseRepository
 
             // Only increment stock when purchase status is RECEIVED
             if ((int) ($purchase->status ?? Purchase::RECEIVED) === Purchase::RECEIVED) {
+                $pairs = [];
                 foreach ($input['purchase_items'] as $purchaseItem) {
-                    manageStock(
-                        $input['warehouse_id'],
-                        $purchaseItem['product_id'],
-                        $purchaseItem['quantity'],
+                    $pairs[] = ['warehouse_id' => (int) $input['warehouse_id'], 'product_id' => (int) $purchaseItem['product_id']];
+                }
+                $stockService->lockStockRows($pairs);
+
+                foreach ($input['purchase_items'] as $purchaseItem) {
+                    $stockService->increase(
+                        (int) $input['warehouse_id'],
+                        (int) $purchaseItem['product_id'],
+                        (float) $purchaseItem['quantity'],
                         'purchase',
                         Purchase::class,
-                        $purchase->id,
+                        (int) $purchase->id,
                         isset($purchaseItem['product_cost']) ? (float) $purchaseItem['product_cost'] : null
                     );
                 }
@@ -212,17 +228,59 @@ class PurchaseRepository extends BaseRepository
     {
         try {
             DB::beginTransaction();
+
+            /** @var \App\Services\StockMovementService $stockService */
+            $stockService = app(\App\Services\StockMovementService::class);
+
             foreach ($input['purchase_items'] as $purchase_items) {
-                if (($purchase_items['quantity'] ?? 0) <= 0) {
-                    throw new UnprocessableEntityHttpException('Please enter a quantity greater than zero.');
+                $stockService->assertPositiveQuantity($purchase_items['quantity'] ?? null, 'Please enter a quantity greater than zero.');
+                $productModel = \App\Models\Product::whereKey($purchase_items['product_id'] ?? null)->first();
+                if ($productModel) {
+                    $stockService->assertSupportedUnitParity($productModel, $purchase_items['purchase_unit'] ?? null, 'purchase');
                 }
             }
-            $purchase = Purchase::findOrFail($id);
-            $purchaseItemIds = PurchaseItem::wherePurchaseId($id)->pluck('id')->toArray();
+
+            $purchase = Purchase::with('purchaseItems')->whereKey($id)->lockForUpdate()->firstOrFail();
+            $wasReceived = ((int) $purchase->status === Purchase::RECEIVED);
+            $newStatus = isset($input['status']) ? (int) $input['status'] : (int) $purchase->status;
+            $willBeReceived = ($newStatus === Purchase::RECEIVED);
+
+            if ($wasReceived && isset($input['warehouse_id']) && (int) $input['warehouse_id'] !== (int) $purchase->warehouse_id) {
+                throw new UnprocessableEntityHttpException('Changing warehouse on a received purchase is not supported; reverse and create a new purchase instead.');
+            }
+
+            $effectiveWarehouseId = (int) ($input['warehouse_id'] ?? $purchase->warehouse_id);
+
+            // If transitioning RECEIVED -> non-RECEIVED, reverse all previously received items first
+            if ($wasReceived && ! $willBeReceived) {
+                $pairs = [];
+                foreach ($purchase->purchaseItems as $existingItem) {
+                    $pairs[] = ['warehouse_id' => (int) $purchase->warehouse_id, 'product_id' => (int) $existingItem->product_id];
+                }
+                $stockService->lockStockRows($pairs);
+
+                foreach ($purchase->purchaseItems as $existingItem) {
+                    $stockService->reverse(
+                        (int) $purchase->warehouse_id,
+                        (int) $existingItem->product_id,
+                        -(float) $existingItem->quantity,
+                        'purchase_status_reversal',
+                        Purchase::class,
+                        (int) $purchase->id,
+                        isset($existingItem->product_cost) ? (float) $existingItem->product_cost : null,
+                        'Purchase reverted from RECEIVED (' . ($purchase->reference_code ?? ('#' . $purchase->id)) . ')',
+                        'Quantity must be less than Available quantity.'
+                    );
+                }
+            }
+
+            // Should individual item edits mutate stock right now? Only when remaining RECEIVED -> RECEIVED.
+            $mutateStockDuringItemEdits = ($wasReceived && $willBeReceived);
+
+            $purchaseItemIds = $purchase->purchaseItems()->pluck('id')->toArray();
             $purchaseItmOldIds = [];
             foreach ($input['purchase_items'] as $key => $purchaseItem) {
-                //get different ids & update
-                $purchaseItmOldIds[$key] = $purchaseItem['purchase_item_id'];
+                $purchaseItmOldIds[$key] = $purchaseItem['purchase_item_id'] ?? null;
                 $purchaseItemArr = Arr::only($purchaseItem, [
                     'purchase_item_id',
                     'product_id',
@@ -238,9 +296,10 @@ class PurchaseRepository extends BaseRepository
                     'quantity',
                     'sub_total',
                 ]);
-                $this->updateItem($purchaseItemArr, $input['warehouse_id']);
-                //create new product items
-                if (is_null($purchaseItem['purchase_item_id'])) {
+                if (! is_null($purchaseItemArr['purchase_item_id'] ?? null)) {
+                    $this->updateItem($purchaseItemArr, $effectiveWarehouseId, $purchase, $mutateStockDuringItemEdits);
+                }
+                if (is_null($purchaseItemArr['purchase_item_id'] ?? null)) {
                     $purchaseItem = $this->calculationPurchaseItems($purchaseItem);
                     $purchaseItemArr = Arr::only($purchaseItem, [
                         'purchase_item_id',
@@ -258,33 +317,75 @@ class PurchaseRepository extends BaseRepository
                         'sub_total',
                     ]);
                     $purchase->purchaseItems()->create($purchaseItemArr);
-                    // manage new product
-                    manageStock($input['warehouse_id'], $purchaseItem['product_id'], $purchaseItem['quantity']);
-                }
-            }
-            $removeItemIds = array_diff($purchaseItemIds, $purchaseItmOldIds);
-            //delete remove product
-            if (! empty(array_values($removeItemIds))) {
-                foreach ($removeItemIds as $removeItemId) {
-                    // remove quantity manage storage
-                    $oldProduct = PurchaseItem::whereId($removeItemId)->first();
-                    $productQuantity = ManageStock::whereWarehouseId($input['warehouse_id'])->whereProductId($oldProduct->product_id)->first();
-                    if ($productQuantity && $oldProduct) {
-                        if ($oldProduct->quantity <= $productQuantity->quantity) {
-                            $productQuantity->update([
-                                'quantity' => $productQuantity->quantity - $oldProduct->quantity,
-                            ]);
-                        }
-                    } else {
-                        throw new UnprocessableEntityHttpException('Quantity must be less than Available quantity.');
+                    if ($mutateStockDuringItemEdits) {
+                        $stockService->increase(
+                            $effectiveWarehouseId,
+                            (int) $purchaseItem['product_id'],
+                            (float) $purchaseItem['quantity'],
+                            'purchase_update_add',
+                            Purchase::class,
+                            (int) $purchase->id,
+                            isset($purchaseItem['product_cost']) ? (float) $purchaseItem['product_cost'] : null
+                        );
                     }
                 }
-                PurchaseItem::whereIn('id', array_values($removeItemIds))->delete();
             }
+
+            $removeItemIds = array_diff($purchaseItemIds, $purchaseItmOldIds);
+            if (! empty(array_values($removeItemIds))) {
+                if ($mutateStockDuringItemEdits) {
+                    foreach ($removeItemIds as $removeItemId) {
+                        $oldProduct = $purchase->purchaseItems()->whereKey($removeItemId)->first();
+                        if (! $oldProduct) {
+                            continue;
+                        }
+                        $stockService->reverse(
+                            $effectiveWarehouseId,
+                            (int) $oldProduct->product_id,
+                            -(float) $oldProduct->quantity,
+                            'purchase_update_reversal',
+                            Purchase::class,
+                            (int) $purchase->id,
+                            isset($oldProduct->product_cost) ? (float) $oldProduct->product_cost : null,
+                            'Purchase item removed (' . ($purchase->reference_code ?? ('#' . $purchase->id)) . ')',
+                            'Quantity must be less than Available quantity.'
+                        );
+                    }
+                }
+                $purchase->purchaseItems()->whereIn('id', array_values($removeItemIds))->delete();
+            }
+
             $purchase = $this->updatePurchaseCalculation($input, $id);
+
+            // If transitioning PENDING/ORDERED -> RECEIVED, credit stock ONCE for all current items
+            if (! $wasReceived && $willBeReceived) {
+                $purchase->load('purchaseItems');
+                $pairs = [];
+                foreach ($purchase->purchaseItems as $item) {
+                    $pairs[] = ['warehouse_id' => (int) $purchase->warehouse_id, 'product_id' => (int) $item->product_id];
+                }
+                $stockService->lockStockRows($pairs);
+
+                foreach ($purchase->purchaseItems as $item) {
+                    $stockService->increase(
+                        (int) $purchase->warehouse_id,
+                        (int) $item->product_id,
+                        (float) $item->quantity,
+                        'purchase',
+                        Purchase::class,
+                        (int) $purchase->id,
+                        isset($item->product_cost) ? (float) $item->product_cost : null,
+                        'Purchase received (' . ($purchase->reference_code ?? ('#' . $purchase->id)) . ')'
+                    );
+                }
+            }
+
             DB::commit();
 
             return $purchase;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
@@ -338,30 +439,44 @@ class PurchaseRepository extends BaseRepository
         return $purchase;
     }
 
-    public function updateItem($purchaseItem, $warehouseId): bool
+    public function updateItem($purchaseItem, $warehouseId, ?Purchase $purchase = null, bool $mutateStock = true): bool
     {
         try {
             $purchaseItem = $this->calculationPurchaseItems($purchaseItem);
-            $item = PurchaseItem::whereId($purchaseItem['purchase_item_id']);
-            // update stock manage
-            $product = ManageStock::whereWarehouseId($warehouseId)->whereProductId($purchaseItem['product_id'])->first();
-            $oldItem = PurchaseItem::whereId($purchaseItem['purchase_item_id'])->first();
-            $totalQuantity = 0;
-            if ($product && $oldItem && $oldItem->quantity != $purchaseItem['quantity']) {
-                if ($oldItem->quantity > $purchaseItem['quantity']) {
-                    $totalQuantity = $product->quantity - ($oldItem->quantity - $purchaseItem['quantity']);
-                } elseif ($oldItem->quantity < $purchaseItem['quantity']) {
-                    $totalQuantity = $product->quantity + ($purchaseItem['quantity'] - $oldItem->quantity);
+            // SEC-A2: Resolve PurchaseItem strictly through the authorized parent Purchase
+            $oldItem = $purchase
+                ? $purchase->purchaseItems()->whereKey($purchaseItem['purchase_item_id'])->first()
+                : PurchaseItem::whereKey($purchaseItem['purchase_item_id'])->whereHas('purchase')->first();
+            if (! $oldItem) {
+                throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException('Purchase item not found.');
+            }
+            if ($mutateStock) {
+                /** @var \App\Services\StockMovementService $stockService */
+                $stockService = app(\App\Services\StockMovementService::class);
+                $newQty = $stockService->assertPositiveQuantity($purchaseItem['quantity'] ?? null, 'Please enter a quantity greater than zero.');
+                $oldQty = (float) $oldItem->quantity;
+                if ($oldQty != $newQty) {
+                    $delta = $newQty - $oldQty;
+                    $stockService->applyDelta(
+                        (int) $warehouseId,
+                        (int) $purchaseItem['product_id'],
+                        $delta,
+                        $delta > 0 ? 'purchase_update_add' : 'purchase_update_sub',
+                        Purchase::class,
+                        (int) ($purchase?->id ?? $oldItem->purchase_id),
+                        isset($purchaseItem['product_cost']) ? (float) $purchaseItem['product_cost'] : null,
+                        null,
+                        'Quantity must be less than Available quantity.'
+                    );
                 }
-                $product->update([
-                    'quantity' => $totalQuantity,
-                ]);
             }
 
-            unset($purchaseItem['purchase_item_id']);
-            $item->update($purchaseItem);
+            unset($purchaseItem['purchase_item_id'], $purchaseItem['purchase_id']);
+            $oldItem->update($purchaseItem);
 
             return true;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            throw $e;
         } catch (Exception $e) {
             throw new UnprocessableEntityHttpException($e->getMessage());
         }

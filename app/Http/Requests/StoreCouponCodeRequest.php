@@ -22,6 +22,10 @@ class StoreCouponCodeRequest extends FormRequest
      */
     public function rules(): array
     {
-        return CouponCode::$rules;
+        return \App\Rules\TenantExists::scopeRules(
+            CouponCode::$rules,
+            [],
+            ['products.*' => 'products']
+        );
     }
 }

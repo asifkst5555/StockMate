@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\Hold;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Models\SaleReturn;
 use App\Models\Taxes;
 use App\Models\Setting;
 use App\Models\Warehouse;
@@ -100,7 +101,7 @@ class SaleAPIController extends AppBaseController
         return new SaleCollection($sales);
     }
 
-    public function store(CreateSaleRequest $request): SaleResource
+    public function store(CreateSaleRequest $request)
     {
         $input = $request->all();
         if (isset($input['payment_status']) && $input['payment_status'] != Sale::UNPAID) {
@@ -115,14 +116,46 @@ class SaleAPIController extends AppBaseController
                 return floatval($detail['amount'] ?? 0);
             });
         }
-        $sale = $this->saleRepository->storeSale($input);
 
-        if (isset($request->hold_ref_no)) {
-            $holdExist = Hold::whereHas('warehouse')->whereReferenceCode($request->hold_ref_no)->first();
-            if (!empty($holdExist)) {
-                $holdExist->delete();
+        $cleanupHold = function () use ($request): void {
+            if (isset($request->hold_ref_no)) {
+                $holdExist = Hold::whereHas('warehouse')->whereReferenceCode($request->hold_ref_no)->first();
+                if (!empty($holdExist)) {
+                    $holdExist->delete();
+                }
             }
+        };
+
+        $idempotencyService = app(\App\Services\SaleIdempotencyService::class);
+        $idempotencyKey = $idempotencyService->normalizeKey($request->header('Idempotency-Key'));
+
+        if ($idempotencyKey !== null && \Illuminate\Support\Facades\Auth::user()) {
+            try {
+                $result = $idempotencyService->execute(
+                    \Illuminate\Support\Facades\Auth::user(),
+                    $idempotencyKey,
+                    $input,
+                    fn () => $this->saleRepository->storeSale($input),
+                    fn () => $cleanupHold()
+                );
+            } catch (\Symfony\Component\HttpKernel\Exception\ConflictHttpException $e) {
+                return $this->sendError($e->getMessage(), 409);
+            } catch (\Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException $e) {
+                return $this->sendError($e->getMessage(), 503);
+            }
+
+            $resource = new SaleResource($result['sale']);
+            if ($result['replayed']) {
+                return $resource->response()
+                    ->setStatusCode(200)
+                    ->header('X-Idempotency-Replayed', 'true');
+            }
+
+            return $resource;
         }
+
+        $sale = $this->saleRepository->storeSale($input);
+        $cleanupHold();
 
         return new SaleResource($sale);
     }
@@ -173,17 +206,45 @@ class SaleAPIController extends AppBaseController
     {
         try {
             DB::beginTransaction();
-            $sale = $this->saleRepository->with('saleItems')->where('id', $id)->first();
+            $sale = Sale::with('saleItems')->where('id', $id)->lockForUpdate()->firstOrFail();
+
+            // C2-B3-03: Block parent Sale deletion if any SaleReturn exists (prevents double stock & cascade erasure)
+            if (SaleReturn::where('sale_id', $sale->id)->lockForUpdate()->exists()) {
+                throw new UnprocessableEntityHttpException(
+                    'Cannot delete sale: one or more sale returns exist for this sale. Please delete the sale returns first.'
+                );
+            }
+
+            /** @var \App\Services\StockMovementService $stockService */
+            $stockService = app(\App\Services\StockMovementService::class);
+            $pairs = [];
             foreach ($sale->saleItems as $saleItem) {
-                manageStock($sale->warehouse_id, $saleItem['product_id'], $saleItem['quantity']);
+                $pairs[] = ['warehouse_id' => $sale->warehouse_id, 'product_id' => $saleItem->product_id];
+            }
+            $stockService->lockStockRows($pairs);
+
+            foreach ($sale->saleItems as $saleItem) {
+                $stockService->reverse(
+                    (int) $sale->warehouse_id,
+                    (int) $saleItem->product_id,
+                    (float) $saleItem->quantity,
+                    'sale_delete_reversal',
+                    Sale::class,
+                    (int) $sale->id,
+                    null,
+                    'Sale deletion reversal (' . ($sale->reference_code ?? ('#' . $sale->id)) . ')'
+                );
             }
             if (File::exists(Storage::path('sales/barcode-' . $sale->reference_code . '.png'))) {
                 File::delete(Storage::path('sales/barcode-' . $sale->reference_code . '.png'));
             }
-            $this->saleRepository->delete($id);
+            $this->saleRepository->delete($sale->id);
             DB::commit();
 
             return $this->sendSuccess('Sale Deleted successfully');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
@@ -212,9 +273,8 @@ class SaleAPIController extends AppBaseController
         
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('sale', 'companyLogo', 'taxes'));
-        
-        Storage::disk(config('app.media_disc'))->put('pdf/Sale-' . $sale->reference_code . '.pdf', $pdfContent);
-        $data['sale_pdf_url'] = Storage::url('pdf/Sale-' . $sale->reference_code . '.pdf');
+
+        $data['sale_pdf_url'] = \App\Services\ProtectedExportService::storePdf('Sale-' . $sale->reference_code, $pdfContent);
 
         return $this->sendResponse($data, 'pdf retrieved Successfully');
     }

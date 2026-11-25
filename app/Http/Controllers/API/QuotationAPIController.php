@@ -154,12 +154,8 @@ class QuotationAPIController extends AppBaseController
         
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('quotation', 'companyLogo', 'taxes'));
-        
-        Storage::disk(config('app.media_disc'))->put(
-            'pdf/Quotation-' . $quotation->reference_code . '.pdf',
-            $pdfContent
-        );
-        $data['quotation_pdf_url'] = Storage::url('pdf/Quotation-' . $quotation->reference_code . '.pdf');
+
+        $data['quotation_pdf_url'] = \App\Services\ProtectedExportService::storePdf('Quotation-' . $quotation->reference_code, $pdfContent);
 
         return $this->sendResponse($data, 'Quotation pdf retrieved Successfully');
     }

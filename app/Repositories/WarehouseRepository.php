@@ -42,15 +42,33 @@ class WarehouseRepository extends BaseRepository
 
     public function warehouseCanDelete($id): bool
     {
-        $saleModel = [
+        $warehouseModels = [
             Sale::class,
-        ];
-        $purchaseModel = [
             Purchase::class,
+            \App\Models\SaleReturn::class,
+            \App\Models\PurchaseReturn::class,
+            \App\Models\Adjustment::class,
+            \App\Models\Expense::class,
+            \App\Models\Quotation::class,
+            \App\Models\Hold::class,
+            \App\Models\StockMovement::class,
         ];
-        $saleWarehouseResult = canDelete($saleModel, 'warehouse_id', $id);
-        $purchaseWarehouseResult = canDelete($purchaseModel, 'warehouse_id', $id);
 
-        return $saleWarehouseResult || $purchaseWarehouseResult;
+        if (canDelete($warehouseModels, 'warehouse_id', $id)) {
+            return true;
+        }
+
+        $hasTransfers = \App\Models\Transfer::where('from_warehouse_id', $id)
+            ->orWhere('to_warehouse_id', $id)
+            ->exists();
+        if ($hasTransfers) {
+            return true;
+        }
+
+        $hasActiveStock = \App\Models\ManageStock::where('warehouse_id', $id)
+            ->where('quantity', '>', 0)
+            ->exists();
+
+        return $hasActiveStock;
     }
 }

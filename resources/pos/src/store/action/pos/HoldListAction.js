@@ -68,26 +68,30 @@ export const fetchHoldList =
     };
 
 export const addHoldList = (holdlist, navigate) => async (dispatch) => {
-    await apiConfig
-        .post(apiBaseURL.HOLDS_LIST, holdlist)
-        .then((response) => {
-            dispatch({
-                type: holdListActionType.ADD_HOLD,
-                payload: response.data.data,
-            });
-            dispatch(
-                addToast({
-                    text: getFormattedMessage(
-                        "hold-list.success.create.message"
-                    ),
-                })
-            );
-        })
-        .catch(({ response }) => {
-            dispatch(
-                addToast({ text: response?.data?.message, type: toastType.ERROR })
-            );
+    try {
+        const response = await apiConfig.post(apiBaseURL.HOLDS_LIST, holdlist);
+        dispatch({
+            type: holdListActionType.ADD_HOLD,
+            payload: response.data.data,
         });
+        dispatch(
+            addToast({
+                text: getFormattedMessage("hold-list.success.create.message"),
+            })
+        );
+        return true;
+    } catch (error) {
+        dispatch(
+            addToast({
+                text:
+                    error?.response?.data?.message ||
+                    error?.message ||
+                    "Failed to hold cart. Please try again.",
+                type: toastType.ERROR,
+            })
+        );
+        return false;
+    }
 };
 
 export const deleteHoldItem = (hold_id) => async (dispatch) => {

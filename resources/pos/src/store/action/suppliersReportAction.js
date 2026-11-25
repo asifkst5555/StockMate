@@ -1,3 +1,4 @@
+import { downloadProtectedFile } from '../../shared/downloadProtectedFile';
 import apiConfig from "../../config/apiConfig";
 import { apiBaseURL, toastType, supplierActionType } from "../../constants";
 import requestParam from "../../shared/requestParam";
@@ -25,7 +26,7 @@ export const fetchSuppliersReport =
         }
         apiConfig
             .get(url)
-            .then((response) => {
+            .then(async (response) => {
                 dispatch({
                     type: supplierActionType.FETCH_SUPPLIERS_REPORT,
                     payload: response.data.data.data,
@@ -44,7 +45,11 @@ export const fetchSuppliersReport =
                     addToast({
                         text: response?.data?.message,
                         type: toastType.ERROR,
-                    })
+
+                if (isLoading) {
+                    dispatch(setLoading(false));
+                }
+            })
                 );
             });
     };
@@ -57,11 +62,8 @@ export const suppliersPdfAction =
         }
         apiConfig
             .get(apiBaseURL.SUPPLIER_REPORT_PDF + "/" + supplierId)
-            .then((response) => {
-                window.open(
-                    response.data.data.suppliers_report_pdf_url,
-                    "_blank"
-                );
+            .then(async (response) => {
+                await downloadProtectedFile(response.data.data.suppliers_report_pdf_url);
                 if (isLoading) {
                     dispatch(setLoading(false));
                 }
@@ -71,7 +73,11 @@ export const suppliersPdfAction =
                     addToast({
                         text: response?.data?.message,
                         type: toastType.ERROR,
-                    })
+
+                if (isLoading) {
+                    dispatch(setLoading(false));
+                }
+            })
                 );
             });
     };

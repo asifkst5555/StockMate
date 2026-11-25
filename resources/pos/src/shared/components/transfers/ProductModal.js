@@ -144,26 +144,29 @@ const ProductModal = ( props ) => {
         const valid = handleValidation();
         if ( valid ) {
             if ( id === modalId ) {
-                const newProduct = product;
-                newProduct.product_cost = Number( netUnitCost );
-                newProduct.fix_net_unit = Number( netUnitCost );
-                newProduct.net_unit_cost = amountBeforeTax( product );
+                const unitPrice = Number( netUnitCost );
+                const newProduct = { ...product };
+                newProduct.product_cost = unitPrice;
+                newProduct.fix_net_unit = unitPrice;
+                newProduct.product_price = unitPrice;
+                newProduct.net_unit_price = unitPrice;
+                newProduct.net_unit_cost = amountBeforeTax( newProduct );
                 newProduct.tax_type = taxType.value.toString();
                 newProduct.tax_value = Number( taxValue );
-                newProduct.tax_amount = taxAmountMultiply( product );
+                newProduct.tax_amount = taxAmountMultiply( newProduct );
                 newProduct.discount_type = discountType.value.toString();
                 newProduct.discount_value = Number( discountValue );
-                newProduct.discount_amount = discountAmountMultiply( product );
-                newProduct.sub_total = subTotalCount( product );
+                newProduct.discount_amount = discountAmountMultiply( newProduct );
+                newProduct.sub_total = subTotalCount( newProduct );
                 newProduct.purchase_unit = purchaseUnit.value ? purchaseUnit.value : purchaseUnit;
                 onProductUpdateInCart( newProduct );
                 handleClose( e );
                 setErrors( '' )
-                updateCost( newProduct.net_unit_cost = amountBeforeTax( product ) )
-                updateTax( newProduct.tax_value = taxValue )
-                updateDiscount( newProduct.discount_value = discountValue )
-                updatePurchaseUnit( newProduct.purchase_unit = purchaseUnit.value ? purchaseUnit.value : purchaseUnit )
-                updateSubTotal( subTotalCount( product ) )
+                updateCost( newProduct.net_unit_cost )
+                updateTax( newProduct.tax_value )
+                updateDiscount( newProduct.discount_value )
+                updatePurchaseUnit( newProduct.purchase_unit )
+                updateSubTotal( newProduct.sub_total )
             }
         }
     };

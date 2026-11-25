@@ -20,6 +20,14 @@ class UpdateSaleRequest extends FormRequest
      */
     public function rules(): array
     {
-        return Sale::$rules;
+        $rules = \App\Rules\TenantExists::scopeRules(
+            Sale::$rules,
+            ['customer_id' => 'customers', 'warehouse_id' => 'warehouses'],
+            ['sale_items.*.product_id' => 'products']
+        );
+
+        $rules['discount'] = 'nullable|numeric|min:0';
+
+        return $rules;
     }
 }

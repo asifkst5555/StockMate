@@ -29,9 +29,28 @@ class SettingAPIController extends AppBaseController
         $this->settingRepository = $productRepository;
     }
 
+    private const TENANT_SECRET_KEYS = [
+        'stripe_secret',
+        'stripe_webhook_secret',
+        'paypal_secret',
+        'paypal_webhook_id',
+        'razorpay_secret',
+        'razorpay_webhook_secret',
+        'paystack_secret',
+        'twillo_token',
+        'smtp_password',
+    ];
+
     public function index(): JsonResponse
     {
         $settings = Setting::all()->pluck('value', 'key')->toArray();
+        // SEC-A3/F-02/V-05: Never expose plaintext secret credentials in tenant settings responses
+        foreach (self::TENANT_SECRET_KEYS as $secretKey) {
+            if (array_key_exists($secretKey, $settings)) {
+                $settings[$secretKey . '_configured'] = ! empty($settings[$secretKey]);
+                unset($settings[$secretKey]);
+            }
+        }
         $settings['store_logo'] = getStoreLogo();
         $settings['store_name'] = getActiveStoreName() ? getActiveStoreName() : ($settings['store_name'] ?? null);
         $settings['warehouse_name'] = Warehouse::whereId($settings['default_warehouse'])->first()->name ?? '';
@@ -47,18 +66,42 @@ class SettingAPIController extends AppBaseController
 
     public function update(Request $request): JsonResponse
     {
+        if ($request->hasFile('store_logo')) {
+            $request->validate([
+                'store_logo' => 'file|image|mimes:jpg,jpeg,png,webp|mimetypes:image/jpeg,image/png,image/webp|dimensions:min_width=1,min_height=1|max:2048',
+            ]);
+        }
+
         $input = $request->all();
         $settings = $this->settingRepository->updateSettings($input);
 
+        // V-05: Never echo submitted secret values back in HTTP responses
+        $safeSettings = is_array($settings) ? $settings : [];
+        foreach (self::TENANT_SECRET_KEYS as $secretKey) {
+            if (array_key_exists($secretKey, $safeSettings)) {
+                $safeSettings[$secretKey . '_configured'] = ! empty($safeSettings[$secretKey]);
+                unset($safeSettings[$secretKey]);
+            }
+        }
+
         return $this->sendResponse(
-            new SettingResource(['type' => 'settings', 'attributes' => $settings]),
+            new SettingResource(['type' => 'settings', 'attributes' => $safeSettings]),
             'Setting data updated successfully'
         );
     }
 
     public function clearCache(): JsonResponse
     {
-        Artisan::call('cache:clear');
+        $user = Auth::user();
+        if ($user && $user->hasRole(\App\Models\Role::SUPER_ADMIN)) {
+            Artisan::call('cache:clear');
+        } else {
+            // C2-35: Never allow tenant users to flush global cache (protects cross-tenant idempotency & payment caches)
+            $tenantId = $user?->tenant_id;
+            if ($tenantId) {
+                \Illuminate\Support\Facades\Cache::forget('settings_' . $tenantId);
+            }
+        }
 
         return $this->sendSuccess(__('messages.success.cache_clear_successfully'));
     }
@@ -163,6 +206,12 @@ class SettingAPIController extends AppBaseController
 
     public function updatePosSettings(Request $request): JsonResponse
     {
+        if ($request->hasFile('click_audio')) {
+            $request->validate([
+                'click_audio' => 'file|mimes:mp3,wav,ogg|mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg|max:2048',
+            ]);
+        }
+
         $input = $request->all();
         $this->settingRepository->updatePosSettings($input);
         return $this->sendSuccess(__('messages.success.pos_settings_updated'));
@@ -191,6 +240,16 @@ class SettingAPIController extends AppBaseController
 
     public function updateDualScreenSettings(Request $request): JsonResponse
     {
+        $fileRules = [];
+        foreach (['image1', 'image2', 'image3', 'image4', 'image5'] as $field) {
+            if ($request->hasFile($field)) {
+                $fileRules[$field] = 'file|image|mimes:jpg,jpeg,png,webp|mimetypes:image/jpeg,image/png,image/webp|dimensions:min_width=1,min_height=1|max:2048';
+            }
+        }
+        if (! empty($fileRules)) {
+            $request->validate($fileRules);
+        }
+
         $input = $request->all();
         $this->settingRepository->updateDualScreenSettings($input);
         return $this->sendSuccess(__('messages.success.dual_screen_settings_updated'));

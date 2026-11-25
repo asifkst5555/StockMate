@@ -42,7 +42,7 @@ class StepAPIController extends AppBaseController
             'title' => 'required',
             'sub_title' => 'required',
             'description' => 'required',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'image' => 'nullable|file|image|mimes:jpeg,png,jpg,webp,gif|mimetypes:image/jpeg,image/png,image/webp,image/gif|max:2048',
         ]);
 
         try {

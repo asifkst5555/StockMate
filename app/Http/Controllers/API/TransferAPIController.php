@@ -11,8 +11,12 @@ use App\Models\ManageStock;
 use App\Models\Transfer;
 use App\Models\TransferItem;
 use App\Repositories\TransferRepository;
+use App\Services\StockMovementService;
+use Exception;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 class TransferAPIController extends AppBaseController
@@ -27,15 +31,33 @@ class TransferAPIController extends AppBaseController
 
     public function index(Request $request): TransferCollection
     {
+        $this->authorizeModuleAction('transfers', 'view');
+
         $perPage = getPageSize($request);
+        $status = $request->get('status');
+        $fromWarehouseId = $request->get('from_warehouse_id');
+        $toWarehouseId = $request->get('to_warehouse_id');
 
-        $transfers = $this->transferRepository;
+        $this->transferRepository->resetScope();
+        $this->transferRepository->scopeQuery(function ($query) use ($status, $fromWarehouseId, $toWarehouseId) {
+            if ($status !== null && $status !== '' && $status !== 'null' && (int) $status > 0) {
+                $query = $query->where('status', (int) $status);
+            }
+            if ($fromWarehouseId !== null && $fromWarehouseId !== '' && $fromWarehouseId !== 'null' && (int) $fromWarehouseId > 0) {
+                $query = $query->where('from_warehouse_id', (int) $fromWarehouseId);
+            }
+            if ($toWarehouseId !== null && $toWarehouseId !== '' && $toWarehouseId !== 'null' && (int) $toWarehouseId > 0) {
+                $query = $query->where('to_warehouse_id', (int) $toWarehouseId);
+            }
 
-        if ($request->get('status') && $request->get('status') != 'null') {
-            $transfers->Where('status', $request->get('status'));
+            return $query;
+        });
+
+        try {
+            $transfers = $this->transferRepository->paginate($perPage);
+        } finally {
+            $this->transferRepository->resetScope();
         }
-
-        $transfers = $transfers->paginate($perPage);
 
         TransferResource::usingWithCollection();
 
@@ -54,6 +76,8 @@ class TransferAPIController extends AppBaseController
 
     public function store(CreateTransferRequest $request): TransferResource
     {
+        $this->authorizeModuleAction('transfers', 'create');
+
         $input = $request->all();
         $transfer = $this->transferRepository->storeTransfer($input);
 
@@ -62,6 +86,8 @@ class TransferAPIController extends AppBaseController
 
     public function show(Transfer $transfer)
     {
+        $this->authorizeModuleAction('transfers', 'view');
+
         $transfer = $transfer->load('transferItems.product');
 
         return new TransferResource($transfer);
@@ -69,6 +95,8 @@ class TransferAPIController extends AppBaseController
 
     public function edit(Transfer $transfer): TransferResource
     {
+        $this->authorizeModuleAction('transfers', 'edit');
+
         $transfer = $transfer->load('transferItems.product.stocks', 'fromWarehouse', 'toWarehouse');
 
         return new TransferResource($transfer);
@@ -76,6 +104,8 @@ class TransferAPIController extends AppBaseController
 
     public function update(UpdateTransferRequest $request, $id): TransferResource
     {
+        $this->authorizeModuleAction('transfers', 'edit');
+
         $input = $request->all();
         $transfer = $this->transferRepository->updateTransfer($input, $id);
 
@@ -90,36 +120,56 @@ class TransferAPIController extends AppBaseController
      */
     public function destroy($id)
     {
+        $this->authorizeModuleAction('transfers', 'delete');
+
         try {
             DB::beginTransaction();
 
-            $transfer = $this->transferRepository->with('transferItems')->where('id', $id)->firstOrFail();
+            $transfer = Transfer::with('transferItems')
+                ->where('id', $id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            /** @var StockMovementService $stockService */
+            $stockService = app(StockMovementService::class);
+
+            $pairs = [];
+            foreach ($transfer->transferItems as $transferItem) {
+                $pairs[] = ['warehouse_id' => $transfer->from_warehouse_id, 'product_id' => $transferItem->product_id];
+                $pairs[] = ['warehouse_id' => $transfer->to_warehouse_id, 'product_id' => $transferItem->product_id];
+            }
+            $stockService->lockStockRows($pairs);
+
+            $legacyStates = $this->transferRepository->inspectAndValidateLegacyState($transfer);
 
             foreach ($transfer->transferItems as $transferItem) {
-                $oldTransferItem = TransferItem::whereId($transferItem->id)->first();
-                $oldTransfer = Transfer::whereId($oldTransferItem->transfer_id)->first();
-                $fromManageStock = ManageStock::whereWarehouseId($oldTransfer->from_warehouse_id)->whereProductId($oldTransferItem->product_id)->first();
-                $toManageStock = ManageStock::whereWarehouseId($oldTransfer->to_warehouse_id)->whereProductId($oldTransferItem->product_id)->first();
+                $state = $legacyStates[$transferItem->id];
+                $productCost = \App\Models\Product::withoutGlobalScope('tenant')
+                    ->whereKey($transferItem->product_id)
+                    ->value('product_cost');
 
-                $toquantity = 0;
-
-                if ($toManageStock) {
-                    $toquantity = $toquantity - $oldTransferItem->quantity;
-                    manageStock($toManageStock->warehouse_id, $oldTransferItem->product_id, $toquantity);
-                }
-
-                $fromQuantity = 0;
-
-                $fromQuantity = $fromQuantity + $oldTransferItem->quantity;
-
-                manageStock($oldTransfer->from_warehouse_id, $oldTransferItem->product_id, $fromQuantity);
+                $stockService->reconcileTransferItem(
+                    (int) $transfer->from_warehouse_id,
+                    (int) $transfer->to_warehouse_id,
+                    (int) $transferItem->product_id,
+                    $state['source_active'],
+                    $state['dest_active'],
+                    0.0,
+                    0.0,
+                    (int) $transfer->id,
+                    $productCost !== null ? (float) $productCost : null,
+                    $transfer->reference_code
+                );
             }
 
-            $this->transferRepository->delete($id);
+            $this->transferRepository->delete($transfer->id);
 
             DB::commit();
 
             return $this->sendSuccess('Transfer delete successfully');
+        } catch (ModelNotFoundException|HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());

@@ -183,19 +183,30 @@ export const generateBarCode = () => {
     return finalCode;
 };
 
-export const calculateMainAmounts = (updateProducts, inputValues) => {
-    const subTotal = calculateSubTotal(updateProducts);
-    const discountRaw = parseFloat(inputValues.discount_value) || 0;
+export const calculateMainAmounts = (updateProducts, inputValues = {}) => {
+    const safeProducts = Array.isArray(updateProducts) ? updateProducts : [];
+    const safeInput = inputValues || {};
+    const subTotal = calculateSubTotal(safeProducts);
+
+    // SalesForm tracks discount_type + discount_value; flat-discount forms store discount directly.
+    const hasTypedDiscount =
+        safeInput.discount_type !== undefined &&
+        safeInput.discount_type !== null &&
+        safeInput.discount_value !== undefined;
+
+    const discountRaw = hasTypedDiscount
+        ? parseFloat(safeInput.discount_value) || 0
+        : parseFloat(safeInput.discount) || 0;
 
     const discountAmount =
-        inputValues.discount_type === discountType.PERCENTAGE
+        hasTypedDiscount && Number(safeInput.discount_type) === discountType.PERCENTAGE
             ? (subTotal * discountRaw) / 100
             : discountRaw;
 
     const totalAmountAfterDiscount = subTotal - discountAmount;
 
-    const taxRate = parseFloat(inputValues.tax_rate) || 0;
-    const taxCal = ((totalAmountAfterDiscount * taxRate) / 100).toFixed(2);
+    const taxRate = parseFloat(safeInput.tax_rate) || 0;
+    const taxCal = ((Math.max(0, totalAmountAfterDiscount) * taxRate) / 100).toFixed(2);
 
     return {
         subTotal,

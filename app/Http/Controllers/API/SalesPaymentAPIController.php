@@ -8,8 +8,13 @@ use App\Http\Resources\SalesPaymentResource;
 use App\Models\Sale;
 use App\Models\SalesPayment;
 use App\Repositories\SalesPaymentRepository;
+use Exception;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 class SalesPaymentAPIController extends AppBaseController
@@ -47,9 +52,16 @@ class SalesPaymentAPIController extends AppBaseController
         return new SalesPaymentResource($salePayment);
     }
 
-    public function updateSalePayment(SalesPayment $salesPayment, Request $request): SalesPaymentResource
+    public function updateSalePayment(SalesPayment $salesPayment, Request $request)
     {
-        $input = $request->all();
+        // SEC-A2: Verify parent Sale belongs to current tenant (Sale uses Multitenantable)
+        $sale = Sale::whereKey($salesPayment->sale_id)->first();
+        if (! $sale) {
+            return $this->sendError('Sales payment not found.', 404);
+        }
+
+        // Prevent reassigning a payment to another sale_id via request payload
+        $input = Arr::except($request->all(), ['sale_id']);
 
         $salePayment = $this->salesPaymentRepository->updateSalePayment($input, $salesPayment);
 
@@ -61,29 +73,40 @@ class SalesPaymentAPIController extends AppBaseController
         try {
             DB::beginTransaction();
 
-            $salePayment = SalesPayment::whereId($id)->firstOrFail();
-            $saleID = $salePayment->sale_id;
+            // SEC-A2: Resolve payment only if its parent Sale belongs to current tenant
+            $salePayment = SalesPayment::whereKey($id)->whereHas('sale')->first();
+            if (! $salePayment) {
+                DB::rollBack();
 
-            $existAmount = SalesPayment::whereSaleId($saleID)->sum('amount') - $salePayment->amount;
+                return $this->sendError('Sales payment not found.', 404);
+            }
+
+            $sale = Sale::whereKey($salePayment->sale_id)->firstOrFail();
+            $saleID = $sale->id;
+
+            $existAmount = $sale->payments()->sum('amount') - $salePayment->amount;
 
             $status = $existAmount <= 0 ? Sale::UNPAID : Sale::PARTIAL_PAID;
 
-            Sale::whereId($saleID)->update([
+            $sale->update([
                 'payment_status' => $status,
                 'paid_amount' => $existAmount,
             ]);
 
-            SalesPayment::findOrFail($id)->delete();
+            $salePayment->delete();
 
-            $latestPayment = SalesPayment::whereSaleId($saleID)->latest()->first();
+            $latestPayment = $sale->payments()->latest()->first();
 
-            Sale::whereId($saleID)->update([
+            $sale->update([
                 'payment_type' => ! empty($latestPayment) ? $latestPayment->payment_type : null,
             ]);
 
             DB::commit();
 
             return $this->sendSuccess('Payment deleted successfully');
+        } catch (ModelNotFoundException|HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());

@@ -194,10 +194,12 @@ class SadminSettingRepository extends BaseRepository
                 'stripe_enabled',
                 'stripe_key',
                 'stripe_secret',
+                'stripe_webhook_secret',
                 'stripe_mode',
                 'paypal_enabled',
                 'paypal_client_id',
                 'paypal_secret',
+                'paypal_webhook_id',
                 'paypal_mode',
                 'paystack_enabled',
                 'paystack_key',
@@ -206,29 +208,50 @@ class SadminSettingRepository extends BaseRepository
                 'razorpay_enabled',
                 'razorpay_key',
                 'razorpay_secret',
+                'razorpay_webhook_secret',
                 'razorpay_mode',
             ]);
 
+            $secretKeys = [
+                'stripe_secret',
+                'stripe_webhook_secret',
+                'paypal_secret',
+                'paypal_webhook_id',
+                'razorpay_secret',
+                'razorpay_webhook_secret',
+                'paystack_secret',
+            ];
             foreach ($settingInputArray as $key => $value) {
+                if (in_array($key, $secretKeys, true) && ($value === '' || $value === null || $value === '********')) {
+                    unset($settingInputArray[$key]);
+                    continue;
+                }
                 SadminSetting::updateOrCreate(['key' => $key], ['value' => $value]);
             }
 
-            // Update .env for keys
-            $env = new DotenvEditor();
+            // Update .env for keys (skipped in automated testing so .env is never mutated by tests)
+            if (! app()->environment('testing')) {
+                $env = new DotenvEditor();
 
-            $envKeysToUpdate = [
-                'stripe_key' => 'STRIPE_KEY',
-                'stripe_secret' => 'STRIPE_SECRET_KEY',
-                'paypal_client_id' => 'PAYPAL_CLIENT_ID',
-                'paypal_secret' => 'PAYPAL_SECRET',
-                'paypal_mode' => 'PAYPAL_MODE',
-                'razorpay_key' => 'RAZOR_KEY',
-                'razorpay_secret' => 'RAZOR_SECRET',
-            ];
+                $envKeysToUpdate = [
+                    'stripe_key' => 'STRIPE_KEY',
+                    'stripe_secret' => 'STRIPE_SECRET_KEY',
+                    'stripe_webhook_secret' => 'STRIPE_WEBHOOK_SECRET',
+                    'paypal_client_id' => 'PAYPAL_CLIENT_ID',
+                    'paypal_secret' => 'PAYPAL_SECRET',
+                    'paypal_webhook_id' => 'PAYPAL_WEBHOOK_ID',
+                    'paypal_mode' => 'PAYPAL_MODE',
+                    'razorpay_key' => 'RAZOR_KEY',
+                    'razorpay_secret' => 'RAZOR_SECRET',
+                    'razorpay_webhook_secret' => 'RAZORPAY_WEBHOOK_SECRET',
+                    'paystack_key' => 'PAYSTACK_PUBLIC_KEY',
+                    'paystack_secret' => 'PAYSTACK_SECRET_KEY',
+                ];
 
-            foreach ($envKeysToUpdate as $inputKey => $envKey) {
-                if (isset($settingInputArray[$inputKey])) {
-                    $this->createOrUpdateEnv($env, $envKey, $settingInputArray[$inputKey]);
+                foreach ($envKeysToUpdate as $inputKey => $envKey) {
+                    if (isset($settingInputArray[$inputKey])) {
+                        $this->createOrUpdateEnv($env, $envKey, $settingInputArray[$inputKey]);
+                    }
                 }
             }
 

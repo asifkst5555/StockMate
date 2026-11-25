@@ -91,6 +91,9 @@ class QuotationRepository extends BaseRepository
             DB::commit();
 
             return $quotation;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
@@ -211,7 +214,9 @@ class QuotationRepository extends BaseRepository
                     'quantity',
                     'sub_total',
                 ]);
-                $this->updateItem($quotationItemArray, $input['warehouse_id']);
+                if (! is_null($quotationItem['quotation_item_id'])) {
+                    $this->updateItem($quotationItemArray, $input['warehouse_id'], $quotation);
+                }
                 //create new product items
                 if (is_null($quotationItem['quotation_item_id'])) {
                     $quotationItem = $this->calculationQuotationItems($quotationItem);
@@ -241,6 +246,9 @@ class QuotationRepository extends BaseRepository
             DB::commit();
 
             return $quotation;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
@@ -291,15 +299,22 @@ class QuotationRepository extends BaseRepository
         return $quotation;
     }
 
-    public function updateItem($quotationItem, $warehouseId): bool
+    public function updateItem($quotationItem, $warehouseId, ?Quotation $quotation = null): bool
     {
         try {
             $quotationItem = $this->calculationQuotationItems($quotationItem);
-            $item = QuotationItem::whereId($quotationItem['quotation_item_id']);
-            unset($quotationItem['quotation_item_id']);
+            $item = $quotation
+                ? $quotation->quotationItems()->whereKey($quotationItem['quotation_item_id'])->first()
+                : QuotationItem::whereKey($quotationItem['quotation_item_id'])->whereHas('quotation')->first();
+            if (! $item) {
+                throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException('Quotation item not found.');
+            }
+            unset($quotationItem['quotation_item_id'], $quotationItem['quotation_id']);
             $item->update($quotationItem);
 
             return true;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            throw $e;
         } catch (Exception $e) {
             throw new UnprocessableEntityHttpException($e->getMessage());
         }

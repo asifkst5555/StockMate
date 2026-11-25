@@ -111,8 +111,9 @@ class SaleReturn extends BaseModel implements HasMedia, JsonResourceful
         'grand_total' => 'nullable|numeric',
         'paid_amount' => 'numeric|nullable',
         'payment_type' => 'numeric|integer|nullable',
-        'notes' => 'nullable',
-        'status' => 'integer|required',
+        'note' => 'nullable|string',
+        'status' => 'integer|required|in:1,2',
+        'payment_status' => 'nullable|integer|in:1,2',
         'reference_code' => 'nullable',
     ];
 
@@ -146,6 +147,11 @@ class SaleReturn extends BaseModel implements HasMedia, JsonResourceful
     const RECEIVED = 1;
 
     const PENDING = 2;
+
+    // Payment status
+    const PAID = 1;
+
+    const UNPAID = 2;
 
     public function prepareLinks(): array
     {

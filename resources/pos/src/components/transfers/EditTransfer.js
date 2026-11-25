@@ -18,33 +18,39 @@ const EditTransfer = ( props ) => {
         fetchTransfer( id );
     }, [] );
 
-    const transferStatusFilterOptions = getFormattedOptions( transferCreatStatusOptions )
-    const transferStatusDefaultValue = tansfers.attributes && tansfers.attributes.status && transferStatusFilterOptions.filter( ( item ) => item.id === tansfers.attributes.status )
+    const transferStatusFilterOptions = getFormattedOptions( transferCreatStatusOptions );
+    const singleRecord = Array.isArray(tansfers)
+        ? (tansfers.find((item) => String(item.id) === String(id)) || null)
+        : (tansfers && tansfers.id && String(tansfers.id) === String(id) ? tansfers : (tansfers?.attributes ? tansfers : null));
 
-    const itemsValue = tansfers && tansfers.attributes && {
-        date: tansfers.attributes.date,
+    const transferStatusDefaultValue = singleRecord && singleRecord.attributes && singleRecord.attributes.status
+        ? transferStatusFilterOptions.filter( ( item ) => item.id === singleRecord.attributes.status )
+        : [];
+
+    const itemsValue = singleRecord && singleRecord.attributes && {
+        date: singleRecord.attributes.date,
         warehouse_id: {
-            value: tansfers.attributes.from_warehouse_id,
-            label: tansfers.attributes.from_warehouse.name,
+            value: singleRecord.attributes.from_warehouse_id,
+            label: singleRecord.attributes.from_warehouse?.name || '',
         },
         from_warehouse_id: {
-            value: tansfers.attributes.from_warehouse_id,
-            label: tansfers.attributes.from_warehouse.name,
+            value: singleRecord.attributes.from_warehouse_id,
+            label: singleRecord.attributes.from_warehouse?.name || '',
         },
         to_warehouse_id: {
-            value: tansfers.attributes.to_warehouse_id,
-            label: tansfers.attributes.to_warehouse.name,
+            value: singleRecord.attributes.to_warehouse_id,
+            label: singleRecord.attributes.to_warehouse?.name || '',
         },
-        tax_rate: tansfers.attributes.tax_rate,
-        tax_amount: tansfers.attributes.tax_amount,
-        discount: tansfers.attributes.discount,
-        shipping: tansfers.attributes.shipping,
-        grand_total: tansfers.attributes.grand_total,
-        amount: tansfers.attributes.amount,
-        transfer_items: tansfers.attributes.transfer_items.map( ( item ) => ( {
+        tax_rate: singleRecord.attributes.tax_rate,
+        tax_amount: singleRecord.attributes.tax_amount,
+        discount: singleRecord.attributes.discount,
+        shipping: singleRecord.attributes.shipping,
+        grand_total: singleRecord.attributes.grand_total,
+        amount: singleRecord.attributes.amount,
+        transfer_items: (singleRecord.attributes.transfer_items || []).map( ( item ) => ( {
             code: item.product && item.product.code,
             name: item.product && item.product.name,
-            product_unit: item.product.product_unit,
+            product_unit: item.product && item.product.product_unit,
             product_id: item.product_id,
             short_name: item.short_name,
             stock_alert: item.product && item.product.stock_alert,
@@ -59,7 +65,7 @@ const EditTransfer = ( props ) => {
             discount_value: item.discount_value,
             discount_amount: item.discount_amount,
             isEdit: true,
-            stock: item.product && item.product.stocks.filter( item => item.warehouse_id === tansfers.attributes.from_warehouse_id ),
+            stock: item.product && item.product.stocks && Array.isArray(item.product.stocks) ? item.product.stocks.filter( s => s.warehouse_id === singleRecord.attributes.from_warehouse_id ) : [],
             sub_total: item.sub_total,
             sale_unit: item.sale_unit && item.sale_unit.id && item.sale_unit.id,
             quantity: item.quantity,
@@ -68,8 +74,8 @@ const EditTransfer = ( props ) => {
             newItem: '',
             purchase_unit: item.product && item.product.purchase_unit
         } ) ),
-        id: tansfers.id,
-        notes: tansfers.attributes.note,
+        id: singleRecord.id,
+        notes: singleRecord.attributes.note,
         status_id: {
             label: transferStatusDefaultValue[ 0 ] && transferStatusDefaultValue[ 0 ].name,
             value: transferStatusDefaultValue[ 0 ] && transferStatusDefaultValue[ 0 ].id

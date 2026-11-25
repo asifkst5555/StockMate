@@ -92,11 +92,9 @@ class ProductImport implements ToCollection, WithChunkReading, WithStartRow, Wit
                     $brandId = $brand->id;
                 }
 
-                if ($row[4] == 'CODE128') {
-                    $barcodeSymbol = 1;
-                } elseif ($row[4] == 'CODE39') {
-                    $barcodeSymbol = 2;
-                } else {
+                $barcodeService = app(\App\Services\BarcodeService::class);
+                $barcodeSymbol = $barcodeService->symbolFromName((string) ($row[4] ?? ''));
+                if ($barcodeSymbol === null) {
                     throw new UnprocessableEntityHttpException('Product barcode symbol ' . $row[4] . ' is not found.');
                 }
 
@@ -181,15 +179,18 @@ class ProductImport implements ToCollection, WithChunkReading, WithStartRow, Wit
                     $supplier = Supplier::whereRaw('LOWER(name) = ?', [strtolower($purchaseStock['supplier'])])->first();
 
                     if ($warehouse && $supplier) {
-                        manageStock($warehouse->id, $product->id, $purchaseStock['quantity']);
-                        $status = $row[17];
-                        if ($status == 'received') {
-                            $status = 1;
-                        } elseif ($status == 'ordered') {
-                            $status = 3;
+                        $statusRaw = strtolower(trim((string) ($row[17] ?? '')));
+                        if ($statusRaw === 'received') {
+                            $status = Purchase::RECEIVED;
+                        } elseif ($statusRaw === 'ordered') {
+                            $status = Purchase::ORDERED;
                         } else {
-                            $status = 2;
+                            $status = Purchase::PENDING;
                         }
+
+                        /** @var \App\Services\StockMovementService $stockService */
+                        $stockService = app(\App\Services\StockMovementService::class);
+                        $importQty = $stockService->assertPositiveQuantity($purchaseStock['quantity'], 'Import purchase quantity must be greater than zero.');
 
                         $purchaseInputArray = [
                             'supplier_id' => $supplier->id,
@@ -212,8 +213,8 @@ class ProductImport implements ToCollection, WithChunkReading, WithStartRow, Wit
                             'discount_value' => 0,
                             'discount_amount' => 0,
                             'purchase_unit' => $product->purchase_unit,
-                            'quantity' => $purchaseStock['quantity'],
-                            'sub_total' => $product->product_cost * $purchaseStock['quantity'],
+                            'quantity' => $importQty,
+                            'sub_total' => $product->product_cost * $importQty,
                         ];
 
                         PurchaseItem::create($purchaseItemInputs);
@@ -222,32 +223,27 @@ class ProductImport implements ToCollection, WithChunkReading, WithStartRow, Wit
                             'reference_code' => getSettingValue('purchase_code') . '_111' . $purchase->id,
                             'grand_total' => $purchaseItemInputs['sub_total'],
                         ]);
+
+                        // C2-17: Only increment stock when imported purchase status is RECEIVED
+                        if ($status === Purchase::RECEIVED && ! $stockService->hasRecordedMovement('purchase', Purchase::class, (int) $purchase->id, (int) $warehouse->id, (int) $product->id)) {
+                            $stockService->increase(
+                                (int) $warehouse->id,
+                                (int) $product->id,
+                                $importQty,
+                                'purchase',
+                                Purchase::class,
+                                (int) $purchase->id,
+                                (float) $product->product_cost,
+                                'Product import purchase (' . $purchase->reference_code . ')'
+                            );
+                        }
                     }
                 }
 
-                $barcodeType = null;
-                $generator = new BarcodeGeneratorPNG();
-                switch ($barcodeSymbol) {
-                    case Product::CODE128:
-                        $barcodeType = $generator::TYPE_CODE_128;
-                        break;
-                    case Product::CODE39:
-                        $barcodeType = $generator::TYPE_CODE_39;
-                        break;
-                    case Product::EAN8:
-                        $barcodeType = $generator::TYPE_EAN_8;
-                        break;
-                    case Product::EAN13:
-                        $barcodeType = $generator::TYPE_EAN_13;
-                        break;
-                    case Product::UPC:
-                        $barcodeType = $generator::TYPE_UPC_A;
-                        break;
-                }
-
-                Storage::disk(config('app.media_disc'))->put(
-                    'product_barcode/barcode-' . $reference_code . '.png',
-                    $generator->getBarcode($row[1], $barcodeType, 4, 70)
+                $barcodeService->storeBarcodePng(
+                    (string) $row[1],
+                    $barcodeSymbol,
+                    $reference_code
                 );
 
                 DB::commit();

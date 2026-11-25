@@ -132,7 +132,7 @@ class PurchaseReturnItem extends BaseModel implements JsonResourceful
             'tax_value' => $this->tax_value,
             'tax_amount' => $this->tax_amount,
             'discount_type' => $this->discount_type,
-            'discount_vale' => $this->discount_value,
+            'discount_value' => $this->discount_value,
             'discount_amount' => $this->discount_amount,
             'purchase_unit' => $this->purchase_unit,
             'quantity' => $this->quantity,

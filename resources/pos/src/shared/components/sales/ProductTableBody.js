@@ -45,9 +45,13 @@ const ProductTableBody = (props) => {
             productSalesDropdown(singleProduct.product_unit);
     }, [updateProductData, singleProduct.sale_unit]);
 
-    useEffect(() => {
-        singleProduct.sub_total = Number(subTotalCount(singleProduct));
-    }, [singleProduct.sub_total]);
+    const withUpdatedQuantity = (item, newQuantity) => {
+        const updated = { ...item, quantity: newQuantity };
+        return {
+            ...updated,
+            sub_total: Number(subTotalCount(updated)),
+        };
+    };
 
     const onProductUpdateInCart = (item) => {
         setUpdateProductData(item);
@@ -64,7 +68,9 @@ const ProductTableBody = (props) => {
             ? setUpdateProducts((updateProducts) =>
                   updateProducts.map((item) => {
                       if (item.id === singleProduct.id) {
-                          if (item.quantity >= item.sold_quantity) {
+                          const currentQty = Number(item.quantity) || 0;
+                          const soldQty = Number(item.sold_quantity) || 0;
+                          if (currentQty >= soldQty) {
                               dispatch(
                                   addToast({
                                       text: getFormattedMessage(
@@ -75,7 +81,11 @@ const ProductTableBody = (props) => {
                               );
                               return item;
                           } else {
-                              return { ...item, quantity: item.quantity++ + 1 };
+                              const newQuantity = Math.min(
+                                  soldQty,
+                                  Number((currentQty + 1).toFixed(2))
+                              );
+                              return withUpdatedQuantity(item, newQuantity);
                           }
                       } else {
                           return item;
@@ -85,7 +95,9 @@ const ProductTableBody = (props) => {
             : setUpdateProducts((updateProducts) =>
                   updateProducts.map((item) => {
                       if (item.id === singleProduct.id) {
-                          const newQuantity = item.quantity + 1;
+                          const newQuantity = Number(
+                              ((Number(item.quantity) || 0) + 1).toFixed(2)
+                          );
                           if (
                               item.quantity_limit &&
                               newQuantity > item.quantity_limit
@@ -100,7 +112,7 @@ const ProductTableBody = (props) => {
                               );
                               return { ...item };
                           }
-                          return { ...item, quantity: newQuantity };
+                          return withUpdatedQuantity(item, newQuantity);
                       } else {
                           return item;
                       }
@@ -109,11 +121,18 @@ const ProductTableBody = (props) => {
     };
 
     const handleDecrement = () => {
-        if (singleProduct.quantity - 1 > 0) {
+        const currentQty = Number(singleProduct.quantity) || 0;
+        const minQuantity =
+            singleProduct.isSaleReturn || singleProduct.isSaleReturnEdit ? 0 : 1;
+        if (currentQty > minQuantity) {
+            const newQuantity = Math.max(
+                minQuantity,
+                Number((currentQty - 1).toFixed(2))
+            );
             setUpdateProducts((updateProducts) =>
                 updateProducts.map((item) =>
                     item.id === singleProduct.id
-                        ? { ...item, quantity: item.quantity-- - 1 }
+                        ? withUpdatedQuantity(item, newQuantity)
                         : item
                 )
             );
@@ -132,12 +151,17 @@ const ProductTableBody = (props) => {
                 return;
             }
         }
+        const parsedQty = Math.max(0, Number(value) || 0);
 
         singleProduct.isSaleReturn || singleProduct.isSaleReturnEdit
             ? setUpdateProducts((updateProducts) =>
                   updateProducts.map((item) => {
                       if (item.id === singleProduct.id) {
-                          if (item.sold_quantity < Number(e.target.value)) {
+                          if (
+                              item.sold_quantity !== undefined &&
+                              item.sold_quantity !== null &&
+                              Number(item.sold_quantity) < parsedQty
+                          ) {
                               dispatch(
                                   addToast({
                                       text: getFormattedMessage(
@@ -146,12 +170,12 @@ const ProductTableBody = (props) => {
                                       type: toastType.ERROR,
                                   })
                               );
-                              return { ...item, quantity: item.sold_quantity };
+                              return withUpdatedQuantity(
+                                  item,
+                                  Number(item.sold_quantity)
+                              );
                           } else {
-                              return {
-                                  ...item,
-                                  quantity: Number(e.target.value),
-                              };
+                              return withUpdatedQuantity(item, parsedQty);
                           }
                       } else {
                           return item;
@@ -161,7 +185,7 @@ const ProductTableBody = (props) => {
             : setUpdateProducts((updateProducts) =>
                   updateProducts.map((item) =>
                       item.id === singleProduct.id
-                          ? { ...item, quantity: Number(value) }
+                          ? withUpdatedQuantity(item, parsedQty)
                           : item
                   )
               );

@@ -135,24 +135,32 @@ class Product extends BaseModel implements HasMedia, JsonResourceful
 
     public static function rules(): array
     {
+        $tenantId = Auth::user()?->tenant_id;
+        $uniqueCode = 'unique:products,code,NULL,id';
+        $uniqueProductCode = 'unique:products,product_code,NULL,id';
+        if ($tenantId) {
+            $uniqueCode .= ',tenant_id,' . $tenantId;
+            $uniqueProductCode .= ',tenant_id,' . $tenantId;
+        }
+
         return [
             'name' => 'required',
-            'code' => 'required|unique:products,code,NULL,id,tenant_id,' . Auth::user()->tenant_id,
-            'product_code' => 'required',
-            'product_category_id' => 'required|exists:product_categories,id',
-            'brand_id' => 'required|exists:brands,id',
+            'code' => 'required|' . $uniqueCode,
+            'product_code' => 'required|' . $uniqueProductCode,
+            'product_category_id' => ['required', 'integer', new \App\Rules\TenantExists('product_categories')],
+            'brand_id' => ['required', 'integer', new \App\Rules\TenantExists('brands')],
             'product_cost' => 'required|numeric',
             'product_price' => 'required|numeric',
-            'product_unit' => 'required',
-            'sale_unit' => 'nullable',
-            'purchase_unit' => 'nullable',
+            'product_unit' => ['required', 'integer', new \App\Rules\TenantExists('units')],
+            'sale_unit' => ['nullable', 'integer', new \App\Rules\TenantExists('units')],
+            'purchase_unit' => ['nullable', 'integer', new \App\Rules\TenantExists('units')],
             'stock_alert' => 'nullable',
             'quantity_limit' => 'nullable',
             'order_tax' => 'nullable|numeric',
             'tax_type' => 'nullable',
             'notes' => 'nullable',
             'barcode_symbol' => 'required',
-            'images.*' => 'image|mimes:jpg,jpeg,png,svg',
+            'images.*' => 'file|image|mimes:jpg,jpeg,png,webp,gif|mimetypes:image/jpeg,image/png,image/webp,image/gif|max:2048',
         ];
     }
 
@@ -200,13 +208,8 @@ class Product extends BaseModel implements HasMedia, JsonResourceful
 
     public function getBarcodeImageUrlAttribute(): string
     {
-        /** @var Media $media */
-        $media = $this->getMedia(Product::PRODUCT_BARCODE_PATH)->first();
-        if (!empty($media)) {
-            return $media->getFullUrl();
-        }
-
-        return '';
+        // Phase B (BAR-02/BAR-03): Unify barcode_image_url & barcode_url via BarcodeService on MEDIA_DISK
+        return app(\App\Services\BarcodeService::class)->resolveProductBarcodeUrl($this);
     }
 
     public function prepareLinks(): array
@@ -249,7 +252,7 @@ class Product extends BaseModel implements HasMedia, JsonResourceful
             'sale_unit_name' => $this->getSaleUnitName(),
             'stock' => $this->stock,
             'warehouse' => $this->warehouse($this->id) ?? '',
-            'barcode_url' => Storage::url('product_barcode/barcode-PR_' . $this->id . '.png'),
+            'barcode_url' => $this->barcode_image_url,
             'in_stock' => $this->inStock($this->id),
         ];
 
@@ -277,9 +280,14 @@ class Product extends BaseModel implements HasMedia, JsonResourceful
      */
     public function getProductUnitName()
     {
-        $productUnit = BaseUnit::whereId($this->product_unit)->first();
+        $productUnit = Unit::whereId($this->product_unit)->first();
         if ($productUnit) {
             return $productUnit->toArray();
+        }
+
+        $baseUnit = BaseUnit::whereId($this->product_unit)->first();
+        if ($baseUnit) {
+            return $baseUnit->toArray();
         }
 
         return '';

@@ -188,15 +188,48 @@
     }
 }
 
-// Print media queries for thermal printing
+// Print media queries for sheet & thermal barcode printing
 @media print {
+    .aside-menu,
+    .aside-menu-container,
+    .header,
+    .top-nav,
+    .footer,
+    .no-print,
+    nav,
+    .btn {
+        display: none !important;
+    }
+
+    .barcode-main {
+        border: none !important;
+        margin: 0 !important;
+        padding: 0.05in !important;
+        background: #ffffff !important;
+        width: 100% !important;
+
+        &__barcode-item {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+        }
+
+        &__barcode-style img {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            max-width: 100%;
+            height: auto;
+        }
+    }
+
     .thermal-print-container {
         margin: 0 !important;
         padding: 0 !important;
         background: white !important;
     }
 
-    .thermal-barcode-item {
+    .thermal-barcode-item:not(.thermal-barcode-item--custom) {
         width: 2in !important;
         height: 1in !important;
         margin: 0 !important;
@@ -230,9 +263,11 @@
         font-size: 6pt !important;
     }
 
-    .thermal-barcode-img {
+    .thermal-barcode-item:not(.thermal-barcode-item--custom) .thermal-barcode-img {
         max-width: 1.8in !important;
         max-height: 0.4in !important;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
     }
 
     .thermal-barcode-code {
@@ -240,8 +275,7 @@
     }
 
     @page {
-        size: 2in 1in;
-        margin: 0;
+        margin: 0.1in;
         background: white !important;
     }
     

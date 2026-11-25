@@ -167,16 +167,47 @@ class SubscriptionAPIController extends AppBaseController
     public function createSubscription(Request $request)
     {
         $validated = $request->validate([
-            'plan_id' => 'required|exists:plans,id',
-            'payment_type' => 'required',
+            'plan_id' => 'required|integer|exists:plans,id',
+            'payment_type' => 'required|integer',
+            'notes' => 'nullable|string|max:1000',
+            'stores' => 'nullable|array',
+            'stores.*' => 'integer',
         ]);
-        
-        if ((int) $validated['payment_type'] == Subscription::TYPE_MANUAL) {
-            $input = $request->all();
-            $this->subscriptionRepository->createSubscription($input);
+
+        $paymentType = (int) $validated['payment_type'];
+        $plan = Plan::findOrFail($validated['plan_id']);
+
+        // SEC-A3: Only allow MANUAL (pending approval) or FREE (strictly when DB plan price == 0)
+        // Strictly allowlist fields and force user_id = Auth::id(); ignore client status/is_paid/amount/discount.
+        if ($paymentType === Subscription::TYPE_MANUAL) {
+            $this->subscriptionRepository->createSubscription([
+                'plan_id' => $plan->id,
+                'user_id' => Auth::id(),
+                'payment_type' => Subscription::TYPE_MANUAL,
+                'notes' => $validated['notes'] ?? null,
+                'attachment' => $request->file('attachment'),
+                'stores' => $validated['stores'] ?? null,
+            ]);
+
             return $this->sendSuccess(__('messages.success.subscription_created'));
         }
 
-        return $this->sendError('Selected payment type is not available');
+        if ($paymentType === Subscription::TYPE_FREE) {
+            if ((float) $plan->price > 0) {
+                return $this->sendError('Paid plans cannot be activated as free subscriptions.', 422);
+            }
+
+            $this->subscriptionRepository->createSubscription([
+                'plan_id' => $plan->id,
+                'user_id' => Auth::id(),
+                'payment_type' => Subscription::TYPE_FREE,
+                'notes' => $validated['notes'] ?? null,
+                'stores' => $validated['stores'] ?? null,
+            ]);
+
+            return $this->sendSuccess(__('messages.success.subscription_created'));
+        }
+
+        return $this->sendError('Selected payment type is not available', 422);
     }
 }

@@ -56,8 +56,16 @@ class SecureFileController extends AppBaseController
             return response()->json(['success' => false, 'message' => 'Invalid file path.'], 403);
         }
 
-        $tenantId = Auth::user()?->tenant_id;
-        if (! $tenantId || ! str_starts_with($normalizedPath, $tenantId . '/')) {
+        $user = Auth::user();
+        $isSuperAdmin = $user && $user->hasRole(\App\Models\Role::SUPER_ADMIN);
+        $tenantId = $user?->tenant_id;
+
+        if ($isSuperAdmin) {
+            // Super Admins may access global/ exports or their active tenant prefix
+            if (! str_starts_with($normalizedPath, 'global/') && (! $tenantId || ! str_starts_with($normalizedPath, $tenantId . '/'))) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized file access.'], 403);
+            }
+        } elseif (! $tenantId || ! str_starts_with($normalizedPath, $tenantId . '/')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized file access.'], 403);
         }
 

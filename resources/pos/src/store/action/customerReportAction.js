@@ -1,3 +1,4 @@
+import { downloadProtectedFile } from '../../shared/downloadProtectedFile';
 import apiConfig from "../../config/apiConfig";
 import { apiBaseURL, toastType, customerActionType } from "../../constants";
 import requestParam from "../../shared/requestParam";
@@ -25,7 +26,7 @@ export const fetchCustomersReport =
         }
         apiConfig
             .get(url)
-            .then((response) => {
+            .then(async (response) => {
                 dispatch({
                     type: customerActionType.FETCH_CUSTOMERS_REPORT,
                     payload: response.data.data.data,
@@ -44,7 +45,11 @@ export const fetchCustomersReport =
                     addToast({
                         text: response?.data?.message,
                         type: toastType.ERROR,
-                    })
+
+                if (isLoading) {
+                    dispatch(setLoading(false));
+                }
+            })
                 );
             });
     };
@@ -70,7 +75,7 @@ export const fetchCustomerSalePayment =
         }
         await apiConfig
             .get(url)
-            .then((response) => {
+            .then(async (response) => {
                 if (isLoading) {
                     dispatch(setLoading(false));
                 }
@@ -98,11 +103,8 @@ export const customerPdfAction =
         }
         apiConfig
             .get(apiBaseURL.CUSTOMER_REPORT_PDF + "/" + customerId)
-            .then((response) => {
-                window.open(
-                    response.data.data.customers_report_pdf_url,
-                    "_blank"
-                );
+            .then(async (response) => {
+                await downloadProtectedFile(response.data.data.customers_report_pdf_url);
                 if (isLoading) {
                     dispatch(setLoading(false));
                 }
@@ -112,7 +114,11 @@ export const customerPdfAction =
                     addToast({
                         text: response?.data?.message,
                         type: toastType.ERROR,
-                    })
+
+                if (isLoading) {
+                    dispatch(setLoading(false));
+                }
+            })
                 );
             });
     };
@@ -120,8 +126,8 @@ export const customerPdfAction =
 export const customerSaleReportPDF = (id) => async (dispatch) => {
     apiConfig
         .get(apiBaseURL.CUSTOMER_SALES_REPORT_PDF + "/" + id)
-        .then((response) => {
-            window.open(response.data.data.customers_sales_pdf_url, "_blank");
+        .then(async (response) => {
+            await downloadProtectedFile(response.data.data.customers_sales_pdf_url);
         })
         .catch(({ response }) => {
             dispatch(
@@ -133,8 +139,8 @@ export const customerSaleReportPDF = (id) => async (dispatch) => {
 export const customerSaleReturnReportPDF = (id) => async (dispatch) => {
     apiConfig
         .get(apiBaseURL.CUSTOMER_SALES_RETURNS_REPORT_PDF + "/" + id)
-        .then((response) => {
-            window.open(response.data.data.customers_returns_pdf_url, "_blank");
+        .then(async (response) => {
+            await downloadProtectedFile(response.data.data.customers_returns_pdf_url);
         })
         .catch(({ response }) => {
             dispatch(
@@ -146,11 +152,8 @@ export const customerSaleReturnReportPDF = (id) => async (dispatch) => {
 export const customerQutationReportPDF = (id) => async (dispatch) => {
     apiConfig
         .get(apiBaseURL.CUSTOMER_QUOTATIONS_REPORT_PDF + "/" + id)
-        .then((response) => {
-            window.open(
-                response.data.data.customers_quotations_pdf_url,
-                "_blank"
-            );
+        .then(async (response) => {
+            await downloadProtectedFile(response.data.data.customers_quotations_pdf_url);
         })
         .catch(({ response }) => {
             dispatch(
@@ -162,11 +165,8 @@ export const customerQutationReportPDF = (id) => async (dispatch) => {
 export const customerSalePaymentReportPDF = (id) => async (dispatch) => {
     apiConfig
         .get(apiBaseURL.CUSTOMER_PAYMENT_REPORT_PDF + "/" + id)
-        .then((response) => {
-            window.open(
-                response.data.data.customers_payments_pdf_url,
-                "_blank"
-            );
+        .then(async (response) => {
+            await downloadProtectedFile(response.data.data.customers_payments_pdf_url);
         })
         .catch(({ response }) => {
             dispatch(

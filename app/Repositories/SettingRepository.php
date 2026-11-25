@@ -60,7 +60,10 @@ class SettingRepository extends BaseRepository
                     $setting = Setting::create(['key' => 'store_logo']);
                 }
                 $setting->clearMediaCollection(Setting::PATH);
-                $media = $setting->addMedia($input['store_logo'])->toMediaCollection(Setting::PATH, config('app.media_disc'));
+                $logoExt = strtolower($input['store_logo']->guessExtension() ?: $input['store_logo']->getClientOriginalExtension() ?: 'png');
+                $media = $setting->addMedia($input['store_logo'])
+                    ->usingFileName(\Illuminate\Support\Str::uuid() . '.' . $logoExt)
+                    ->toMediaCollection(Setting::PATH, config('app.media_disc'));
                 $setting = $setting->refresh();
                 $input['store_logo'] = $media->getFullUrl();
             }
@@ -98,7 +101,13 @@ class SettingRepository extends BaseRepository
                 'show_logo_in_receipt',
             ]);
 
+            $tenantSecretKeys = ['stripe_secret', 'twillo_token', 'smtp_password'];
+
             foreach ($settingInputArray as $key => $value) {
+                // V-05: Preserve existing tenant secret if blank or masked placeholder submitted
+                if (in_array($key, $tenantSecretKeys, true) && ($value === '' || $value === null || $value === '********')) {
+                    continue;
+                }
                 $setting = Setting::where('key', '=', $key)->where('tenant_id', '=', getActiveStore()->tenant_id)->first();
                 if ($key == 'is_currency_right' || $key == 'show_logo_in_receipt') {
                     if ($setting) {
@@ -124,7 +133,8 @@ class SettingRepository extends BaseRepository
             }
             DB::commit();
 
-            return $input;
+            // Return only allowlisted fields (never raw unvalidated $input or secret values)
+            return Arr::except($settingInputArray, $tenantSecretKeys);
         } catch (Exception $exception) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($exception->getMessage());
@@ -179,7 +189,10 @@ class SettingRepository extends BaseRepository
                         ]);
                     }
                     $setting->clearMediaCollection(Setting::CLICK_AUDIO);
-                    $media = $setting->addMedia($input['click_audio'])->toMediaCollection(Setting::CLICK_AUDIO, config('app.media_disc'));
+                    $audioExt = strtolower($input['click_audio']->guessExtension() ?: $input['click_audio']->getClientOriginalExtension() ?: 'mp3');
+                    $media = $setting->addMedia($input['click_audio'])
+                        ->usingFileName(\Illuminate\Support\Str::uuid() . '.' . $audioExt)
+                        ->toMediaCollection(Setting::CLICK_AUDIO, config('app.media_disc'));
                     $setting = $setting->refresh();
                     $input['click_audio'] = $media->getFullUrl();
                 }
@@ -233,7 +246,9 @@ class SettingRepository extends BaseRepository
                 foreach (['image1', 'image2', 'image3', 'image4', 'image5'] as $field) {
                     if (!empty($input[$field])) {
                         if ($input[$field] instanceof \Illuminate\Http\UploadedFile) {
+                            $imgExt = strtolower($input[$field]->guessExtension() ?: $input[$field]->getClientOriginalExtension() ?: 'png');
                             $media = $setting->addMedia($input[$field])
+                                ->usingFileName(\Illuminate\Support\Str::uuid() . '.' . $imgExt)
                                 ->toMediaCollection(Setting::DUAL_SCREEN, config('app.media_disc'));
                             $url = $media->getFullUrl();
                             $imageUrls[] = $url;

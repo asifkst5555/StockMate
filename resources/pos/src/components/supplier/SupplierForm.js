@@ -59,7 +59,8 @@ const SupplierForm = (props) => {
 
     const onChangeInput = (e) => {
         e.preventDefault();
-        setSupplierValue(inputs => ({...inputs, [e.target.name]: e.target.value}))
+        const { name, value } = e.target;
+        setSupplierValue(inputs => ({...inputs, [name]: value}))
         setErrors('');
     };
 

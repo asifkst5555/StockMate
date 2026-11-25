@@ -46,6 +46,7 @@ class ManageStock extends BaseModel implements JsonResourceful
     const JSON_API_TYPE = 'manage_stocks';
 
     protected $fillable = [
+        'tenant_id',
         'warehouse_id',
         'product_id',
         'quantity',
@@ -77,14 +78,14 @@ class ManageStock extends BaseModel implements JsonResourceful
         parent::boot();
 
         static::updating(function ($model) {
-            $product = Product::find($model->product_id);
+            $product = Product::withoutGlobalScope('tenant')->find($model->product_id);
             if ($product) {
                 $model->alert = $model->quantity <= $product->stock_alert;
             }
         });
 
         static::creating(function ($model) {
-            $product = Product::find($model->product_id);
+            $product = Product::withoutGlobalScope('tenant')->find($model->product_id);
             if ($product) {
                 $model->alert = $model->quantity <= $product->stock_alert;
             }
@@ -137,9 +138,18 @@ class ManageStock extends BaseModel implements JsonResourceful
      */
     public function getProductUnitName()
     {
-        $productUnit = BaseUnit::whereId($this->product->product_unit)->first();
+        if (! $this->product) {
+            return '';
+        }
+
+        $productUnit = Unit::whereId($this->product->product_unit)->first();
         if ($productUnit) {
             return $productUnit->name;
+        }
+
+        $baseUnit = BaseUnit::whereId($this->product->product_unit)->first();
+        if ($baseUnit) {
+            return $baseUnit->name;
         }
 
         return '';

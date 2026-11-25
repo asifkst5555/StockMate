@@ -15,6 +15,7 @@ class Transaction extends BaseModel implements JsonResourceful
     protected $fillable = [
         'tenant_id',
         'transaction_id',
+        'provider_payment_intent_id',
         'amount',
         'type',
         'status',

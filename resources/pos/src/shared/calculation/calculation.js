@@ -42,18 +42,23 @@ export const amountBeforeTax = (cartItem) => {
 
 //Grand Total Calculation
 export const calculateCartTotalTaxAmount = (carts, inputValue) => {
-    let taxValue = inputValue && inputValue.tax_rate;
-    let totalTax = 0;
-    let price = 0;
+    const taxValue = parseFloat(inputValue && inputValue.tax_rate) || 0;
+    if (taxValue <= 0 || !Array.isArray(carts) || carts.length === 0) {
+        return (0).toFixed(2);
+    }
 
-    carts.forEach(cartItem => {
-        if (taxValue > 0) {
-            price = price + +cartItem.sub_total
-            totalTax = (((+price - inputValue.discount) / 100) * +taxValue) * +cartItem.quantity;
-        }
-    })
+    const discount = parseFloat(inputValue && inputValue.discount) || 0;
+    const price = carts.reduce((sum, cartItem) => {
+        const itemSubTotal =
+            cartItem?.sub_total !== undefined && cartItem?.sub_total !== null
+                ? parseFloat(cartItem.sub_total)
+                : Number(subTotalCount(cartItem));
+        return sum + (Number.isFinite(itemSubTotal) ? itemSubTotal : 0);
+    }, 0);
 
-    return (parseFloat(totalTax)).toFixed(2);
+    const totalTax = (Math.max(0, price - discount) * taxValue) / 100;
+
+    return totalTax.toFixed(2);
 }
 
 export const calculateSubTotal = (carts) => {

@@ -134,26 +134,56 @@ class SaleReturnAPIController extends AppBaseController
     {
         try {
             DB::beginTransaction();
-            $saleReturn = $this->saleReturnRepository->with('saleReturnItems')->where('id', $id)->first();
-            $sale = Sale::whereId($saleReturn->sale_id)->first();
-            if ($sale) {
-                $sale->update(['is_return' => 0]);
+            // S1 lock order: Parent Sale -> SaleReturn -> ManageStock
+            $saleId = SaleReturn::whereKey($id)->value('sale_id');
+            $sale = null;
+            if ($saleId) {
+                $sale = Sale::whereId($saleId)->lockForUpdate()->first();
             }
-            foreach ($saleReturn->saleReturnItems as $saleReturnItem) {
-                $product = ManageStock::whereWarehouseId($saleReturn->warehouse_id)->whereProductId($saleReturnItem['product_id'])->first();
-                if ($product) {
-                    if ($product->quantity >= $saleReturnItem['quantity']) {
-                        $totalQuantity = $product->quantity - $saleReturnItem['quantity'];
-                        $product->update([
-                            'quantity' => $totalQuantity,
-                        ]);
-                    }
+
+            $saleReturn = SaleReturn::with('saleReturnItems')->where('id', $id)->lockForUpdate()->firstOrFail();
+            if ($saleReturn->sale_id && (! $sale || (int) $sale->id !== (int) $saleReturn->sale_id)) {
+                $sale = Sale::whereId($saleReturn->sale_id)->lockForUpdate()->first();
+            }
+
+            if ((int) $saleReturn->status === SaleReturn::RECEIVED) {
+                /** @var \App\Services\StockMovementService $stockService */
+                $stockService = app(\App\Services\StockMovementService::class);
+                $pairs = [];
+                foreach ($saleReturn->saleReturnItems as $item) {
+                    $pairs[] = ['warehouse_id' => (int) $saleReturn->warehouse_id, 'product_id' => (int) $item->product_id];
+                }
+                $stockService->lockStockRows($pairs);
+
+                foreach ($saleReturn->saleReturnItems as $saleReturnItem) {
+                    $stockService->reverse(
+                        (int) $saleReturn->warehouse_id,
+                        (int) $saleReturnItem->product_id,
+                        -(float) $saleReturnItem->quantity,
+                        'sale_return_delete_reversal',
+                        SaleReturn::class,
+                        (int) $saleReturn->id,
+                        null,
+                        'Sale return deletion reversal (' . ($saleReturn->reference_code ?? ('#' . $saleReturn->id)) . ')',
+                        'Cannot delete sale return: insufficient stock available to reverse returned quantity.'
+                    );
                 }
             }
-            $this->saleReturnRepository->delete($id);
+
+            $parentSaleId = $saleReturn->sale_id;
+            $this->saleReturnRepository->delete($saleReturn->id);
+
+            if ($parentSaleId && $sale) {
+                $hasOtherReturns = SaleReturn::where('sale_id', $sale->id)->exists();
+                $sale->update(['is_return' => $hasOtherReturns ? 1 : 0]);
+            }
+
             DB::commit();
 
             return $this->sendSuccess('Sale Return Deleted successfully');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
@@ -200,12 +230,8 @@ class SaleReturnAPIController extends AppBaseController
         
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('saleReturn', 'companyLogo', 'taxes'));
-        
-        Storage::disk(config('app.media_disc'))->put(
-            'pdf/sale_return-' . $saleReturn->reference_code . '.pdf',
-            $pdfContent
-        );
-        $data['sale_return_pdf_url'] = Storage::url('pdf/sale_return-' . $saleReturn->reference_code . '.pdf');
+
+        $data['sale_return_pdf_url'] = \App\Services\ProtectedExportService::storePdf('sale_return-' . $saleReturn->reference_code, $pdfContent);
 
         return $this->sendResponse($data, 'Sale return pdf retrieved Successfully');
     }
@@ -229,17 +255,21 @@ class SaleReturnAPIController extends AppBaseController
     {
         try {
             DB::beginTransaction();
-            $saleReturn = $this->saleReturnRepository->where('id', $id)->first();
+            $saleReturn = SaleReturn::whereKey($id)->lockForUpdate()->firstOrFail();
             $saleReturn->update([
-                'status' => 1
+                'payment_status' => SaleReturn::PAID,
+                'paid_amount' => (float) ($saleReturn->grand_total ?? 0),
             ]);
 
             DB::commit();
 
             return $this->sendSuccess('Mark as paid successfully');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
-            return $this->sendError($e->getMessage());
+            throw new UnprocessableEntityHttpException($e->getMessage());
         }
     }
 }

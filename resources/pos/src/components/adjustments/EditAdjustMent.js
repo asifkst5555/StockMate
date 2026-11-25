@@ -26,28 +26,34 @@ const EditAdjustMent = (props) => {
         fetchAdjustment(id, false);
     }, []);
 
+    const singleRecord = Array.isArray(adjustments)
+        ? (adjustments.find((item) => String(item.id) === String(id)) || null)
+        : (adjustments && adjustments.id && String(adjustments.id) === String(id) ? adjustments : (adjustments?.attributes ? adjustments : null));
 
     const method_type =
-        adjustments.attributes &&
-        adjustments.attributes.adjustment_items &&
-        adjustments.attributes.adjustment_items.map((item) => item.method_type);
+        singleRecord &&
+        singleRecord.attributes &&
+        singleRecord.attributes.adjustment_items &&
+        singleRecord.attributes.adjustment_items.map((item) => item.method_type);
     const selectedAdjustMentType =
-        adjustments.attributes &&
-        adjustments.attributes.adjustment_items &&
+        singleRecord &&
+        singleRecord.attributes &&
+        singleRecord.attributes.adjustment_items &&
+        method_type &&
         AdjustmentType.filter((item) => item.value === method_type[0]);
 
-    const itemsValue = adjustments &&
-        adjustments.attributes && {
-            date: adjustments.attributes.date,
+    const itemsValue = singleRecord &&
+        singleRecord.attributes && {
+            date: singleRecord.attributes.date,
             warehouse_id: {
-                value: adjustments.attributes.warehouse_id,
-                label: adjustments.attributes.warehouse_name,
+                value: singleRecord.attributes.warehouse_id,
+                label: singleRecord.attributes.warehouse_name,
             },
-            adjustment_items: adjustments.attributes.adjustment_items.map(
+            adjustment_items: (singleRecord.attributes.adjustment_items || []).map(
                 (item) => ({
                     code: item.product && item.product.code,
                     name: item.product && item.product.name,
-                    product_unit: item.product.product_unit,
+                    product_unit: item.product && item.product.product_unit,
                     product_id: item.product_id,
                     short_name: item.sale_unit && item.sale_unit,
                     stock_alert: item.product && item.product.stock_alert,
@@ -65,11 +71,13 @@ const EditAdjustMent = (props) => {
                     quantity: item.quantity,
                     stock:
                         item.product &&
+                        item.product.stocks &&
+                        Array.isArray(item.product.stocks) ?
                         item.product.stocks.filter(
                             (items) =>
                                 items.warehouse_id ===
-                                adjustments.attributes.warehouse_id
-                        ),
+                                singleRecord.attributes.warehouse_id
+                        ) : [],
                     id: item.product_id,
                     sale_item_id: item.id,
                     newItem: "",
@@ -78,8 +86,8 @@ const EditAdjustMent = (props) => {
                     adjustment_item_id: item.id,
                 })
             ),
-            id: adjustments.id,
-            notes: adjustments.attributes.note,
+            id: singleRecord.id,
+            notes: singleRecord.attributes.note,
             AdjustmentType: {
                 label:
                     selectedAdjustMentType &&

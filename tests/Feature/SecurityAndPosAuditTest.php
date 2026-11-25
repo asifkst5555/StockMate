@@ -673,6 +673,20 @@ class SecurityAndPosAuditTest extends TestCase
         $this->assertNull(\Laravel\Sanctum\PersonalAccessToken::findToken($token));
     }
 
+    public function test_get_plan_feature_handles_plan_without_plan_feature_record(): void
+    {
+        $plan = new \App\Models\Plan([
+            'name' => 'Standalone Test Plan Without Feature',
+            'type' => 1,
+            'price' => 10,
+        ]);
+        $plan->setRelation('planFeature', null);
+
+        $features = getPlanFeature($plan);
+        $this->assertIsArray($features);
+        $this->assertEmpty($features);
+    }
+
     public function test_stockmate_contact_information_and_whatsapp_links_render_on_landing_page(): void
     {
         $response = $this->get('/');

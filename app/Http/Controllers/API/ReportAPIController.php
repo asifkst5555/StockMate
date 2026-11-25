@@ -87,104 +87,56 @@ class ReportAPIController extends AppBaseController
 
     public function getWarehouseSaleReportExcel(Request $request): JsonResponse
     {
-        $path = $this->tenantExcelPath('sale-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new SalesWarehouseReportExport, $path);
-
-        $data['sale_excel_url'] = Storage::url($path);
+        $data['sale_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new SalesWarehouseReportExport, 'sale-report-excel');
 
         return $this->sendResponse($data, 'Sale Report retrieved successfully');
     }
 
     public function getWarehousePurchaseReportExcel(Request $request): JsonResponse
     {
-        $path = $this->tenantExcelPath('purchase-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new PurchasesWarehouseReportExport, $path);
-
-        $data['purchase_excel_url'] = Storage::url($path);
+        $data['purchase_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new PurchasesWarehouseReportExport, 'purchase-report-excel');
 
         return $this->sendResponse($data, 'purchase Report retrieved successfully');
     }
 
     public function getWarehouseSaleReturnReportExcel(Request $request): JsonResponse
     {
-        $path = $this->tenantExcelPath('sale-return-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new SaleReturnWarehouseReportExport, $path);
-
-        $data['sale_return_excel_url'] = Storage::url($path);
+        $data['sale_return_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new SaleReturnWarehouseReportExport, 'sale-return-report-excel');
 
         return $this->sendResponse($data, 'sale return Report retrieved successfully');
     }
 
     public function getWarehousePurchaseReturnReportExcel(Request $request): JsonResponse
     {
-        $path = $this->tenantExcelPath('purchase-return-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new PurchaseReturnWarehouseReportExport, $path);
-
-        $data['purchase_return_excel_url'] = Storage::url($path);
+        $data['purchase_return_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new PurchaseReturnWarehouseReportExport, 'purchase-return-report-excel');
 
         return $this->sendResponse($data, 'purchase return Report retrieved successfully');
     }
 
     public function getWarehouseExpenseReportExcel(Request $request): JsonResponse
     {
-        $path = $this->tenantExcelPath('expense-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new ExpenseWarehouseReportExport, $path);
-
-        $data['expense_excel_url'] = Storage::url($path);
+        $data['expense_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new ExpenseWarehouseReportExport, 'expense-report-excel');
 
         return $this->sendResponse($data, 'expenses Report retrieved successfully');
     }
 
     public function getSalesReportExcel(Request $request): JsonResponse
     {
-        $path = $this->tenantExcelPath('total-sales-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new SaleReportExport, $path);
-
-        $data['total_sale_excel_url'] = Storage::url($path);
+        $data['total_sale_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new SaleReportExport, 'total-sales-report-excel');
 
         return $this->sendResponse($data, 'Sale Report retrieved successfully');
     }
 
     public function getPurchaseReportExcel(Request $request): JsonResponse
     {
-        $path = $this->tenantExcelPath('purchases-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new PurchaseReportExport, $path);
-
-        $data['total_purchase_excel_url'] = Storage::url($path);
+        $data['total_purchase_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new PurchaseReportExport, 'purchases-report-excel');
 
         return $this->sendResponse($data, 'Purchase Report retrieved successfully');
     }
 
     public function getSellingProductReportExcel(): JsonResponse
     {
-        $path = $this->tenantExcelPath('top-selling-product-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new TopSellingProductReportExport, $path);
-
-        $data['top_selling_product_excel_url'] = Storage::url($path);
+        $data['top_selling_product_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new TopSellingProductReportExport, 'top-selling-product-report-excel');
 
         return $this->sendResponse($data, 'Top selling product Report retrieved successfully');
     }
@@ -229,64 +181,35 @@ class ReportAPIController extends AppBaseController
 
     public function stockReportExcel(Request $request): JsonResponse
     {
-        $path = $this->tenantExcelPath('stock-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new StockReportExport, $path);
-
-        $data['stock_report_excel_url'] = Storage::url($path);
+        $data['stock_report_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new StockReportExport, 'stock-report-excel');
 
         return $this->sendResponse($data, 'Stock Report retrieved successfully');
     }
 
     public function getProductSaleReportExport(): JsonResponse
     {
-        $path = $this->tenantExcelPath('product-sales-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new ProductSaleReportExport, $path);
-
-        $data['product_sale_report_excel_url'] = Storage::url($path);
+        $data['product_sale_report_excel_url'] = \App\Services\ProtectedExportService::storeExcel(new ProductSaleReportExport, 'product-sales-report-excel');
 
         return $this->sendResponse($data, 'Product sales Report retrieved successfully');
     }
 
     public function getPurchaseProductReportExport(): JsonResponse
     {
-        $path = $this->tenantExcelPath('product-purchases-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new ProductPurchaseReportExport, $path);
-
-        $data['product_purchase_report_url'] = Storage::url($path);
+        $data['product_purchase_report_url'] = \App\Services\ProtectedExportService::storeExcel(new ProductPurchaseReportExport, 'product-purchases-report-excel');
 
         return $this->sendResponse($data, 'Product purchases retrieved successfully');
     }
 
     public function getSaleReturnProductReportExport(): JsonResponse
     {
-        $path = $this->tenantExcelPath('product-sale-return-report-excel.xlsx');
-        if (Storage::exists($path)) {
-            Storage::delete($path);
-        }
-        Excel::store(new ProductSaleReturnReportExport, $path);
-
-        $data['product_sale_return_report_url'] = Storage::url($path);
+        $data['product_sale_return_report_url'] = \App\Services\ProtectedExportService::storeExcel(new ProductSaleReturnReportExport, 'product-sale-return-report-excel');
 
         return $this->sendResponse($data, 'Product sale returns retrieved successfully');
     }
 
     public function getPurchaseReturnProductReportExport(): JsonResponse
     {
-        if (Storage::exists('excel/product-purchase-return-report-excel.xlsx')) {
-            Storage::delete('excel/product-purchase-return-report-excel.xlsx');
-        }
-        Excel::store(new ProductPurchaseReturnReportExport, 'excel/product-purchase-return-report-excel.xlsx');
-
-        $data['product_purchase_return_report_url'] = Storage::url('excel/product-purchase-return-report-excel.xlsx');
+        $data['product_purchase_return_report_url'] = \App\Services\ProtectedExportService::storeExcel(new ProductPurchaseReturnReportExport, 'product-purchase-return-report-excel');
 
         return $this->sendResponse($data, 'Product sale returns retrieved successfully');
     }
@@ -347,26 +270,28 @@ class ReportAPIController extends AppBaseController
         $salesShippingAmount = Sale::where('date', $today)->sum('shipping');
         $totalGrandTotalAmount = Sale::where('date', $today)->sum('grand_total');
 
-        $data['today_sales_cash_payment'] = SalesPayment::where('payment_date', $today)->where(
-            'payment_type',
-            SalesPayment::CASH
-        )->sum('amount');
-        $data['today_sales_cheque_payment'] = SalesPayment::where('payment_date', $today)->where(
-            'payment_type',
-            SalesPayment::CHEQUE
-        )->sum('amount');
-        $data['today_sales_bank_transfer_payment'] = SalesPayment::where('payment_date', $today)->where(
-            'payment_type',
-            SalesPayment::BANK_TRANSFER
-        )->sum('amount');
-        $data['today_sales_other_payment'] = SalesPayment::where('payment_date', $today)->where(
-            'payment_type',
-            SalesPayment::OTHER
-        )->sum('amount');
+        $data['today_sales_cash_payment'] = SalesPayment::whereHas('sale')
+            ->where('payment_date', $today)
+            ->where('payment_type', SalesPayment::CASH)
+            ->sum('amount');
+        $data['today_sales_cheque_payment'] = SalesPayment::whereHas('sale')
+            ->where('payment_date', $today)
+            ->where('payment_type', SalesPayment::CHEQUE)
+            ->sum('amount');
+        $data['today_sales_bank_transfer_payment'] = SalesPayment::whereHas('sale')
+            ->where('payment_date', $today)
+            ->where('payment_type', SalesPayment::BANK_TRANSFER)
+            ->sum('amount');
+        $data['today_sales_other_payment'] = SalesPayment::whereHas('sale')
+            ->where('payment_date', $today)
+            ->where('payment_type', SalesPayment::OTHER)
+            ->sum('amount');
 
         $data['today_sales_total_amount'] = $totalGrandTotalAmount;
         $data['today_sales_total_return_amount'] = SaleReturn::where('date', $today)->sum('grand_total');
-        $data['today_sales_payment_amount'] = SalesPayment::where('payment_date', $today)->sum('amount');
+        $data['today_sales_payment_amount'] = SalesPayment::whereHas('sale')
+            ->where('payment_date', $today)
+            ->sum('amount');
 
         $productsData = Product::leftJoin(
             'sale_items',
@@ -428,10 +353,10 @@ class ReportAPIController extends AppBaseController
     public function getSupplierReport(Request $request): JsonResponse
     {
         $perPage = getPageSize($request);
-        $suppliers = $this->supplierRepository->withCount('purchases')->with('purchases')->paginate($perPage);
+        $suppliers = $this->supplierRepository->withCount('purchases')->withSum('purchases', 'grand_total')->paginate($perPage);
 
         foreach ($suppliers as $key => $supplier) {
-            $suppliers[$key]['total_grand_amount'] = $supplier->purchases->sum('grand_total');
+            $suppliers[$key]['total_grand_amount'] = round((float) ($supplier->purchases_sum_grand_total ?? 0), 2);
         }
 
         return $this->sendResponse($suppliers, 'Suppliers  retrieved successfully');
@@ -442,8 +367,8 @@ class ReportAPIController extends AppBaseController
         $perPage = getPageSize($request);
 
         $search = $request->filter['search'] ?? '';
-        $supplier = (Supplier::where('name', 'LIKE', "%$search%")->get()->count() != 0);
-        $warehouse = (Warehouse::where('name', 'LIKE', "%$search%")->get()->count() != 0);
+        $supplier = Supplier::where('name', 'LIKE', "%$search%")->exists();
+        $warehouse = Warehouse::where('name', 'LIKE', "%$search%")->exists();
 
         $purchases = QueryBuilder::for(Purchase::class)
             ->where('supplier_id', $supplierId)
@@ -474,13 +399,13 @@ class ReportAPIController extends AppBaseController
         $perPage = getPageSize($request);
 
         $search = $request->filter['search'] ?? '';
-        $supplier = (Supplier::where('name', 'LIKE', "%$search%")->get()->count() != 0);
-        $warehouse = (Warehouse::where('name', 'LIKE', "%$search%")->get()->count() != 0);
-        $reference = (PurchaseReturn::whereSupplierId($supplierId)->where(
+        $supplier = Supplier::where('name', 'LIKE', "%$search%")->exists();
+        $warehouse = Warehouse::where('name', 'LIKE', "%$search%")->exists();
+        $reference = PurchaseReturn::whereSupplierId($supplierId)->where(
             'reference_code',
             'LIKE',
             "%$search%"
-        )->get()->count() != 0);
+        )->exists();
 
         $purchaseReturns = QueryBuilder::for(PurchaseReturn::class)
             ->where('supplier_id', $supplierId)

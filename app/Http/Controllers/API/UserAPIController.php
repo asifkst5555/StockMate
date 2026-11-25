@@ -264,30 +264,9 @@ class UserAPIController extends AppBaseController
 
         $userPermissions = $user->getAllPermissions()->pluck('name')->toArray();
 
-        $currentSubscription = Subscription::where('user_id', $user->id)->where('status', Subscription::ACTIVE)->first();
-        if (!empty($currentSubscription) && isset($currentSubscription->plan->planFeature)) {
-            $subscriptionFeature = $currentSubscription->plan->planFeature;
-            if (!$subscriptionFeature->pos_management) {
-                $userPermissions = array_values(array_diff($userPermissions, ["manage_pos_screen"]));
-            }
-            if (!$subscriptionFeature->reports) {
-                $userPermissions = array_values(array_diff($userPermissions, ["manage_reports"]));
-            }
-            if (!$subscriptionFeature->emails_support) {
-                $userPermissions = array_values(array_diff($userPermissions, ["manage_email_templates"]));
-            }
-            if (!$subscriptionFeature->sms_support) {
-                $userPermissions = array_values(array_diff($userPermissions, ["manage_sms_templates", "manage_sms_apis"]));
-            }
-            if (!$subscriptionFeature->inventory_management) {
-                $userPermissions = array_values(array_diff($userPermissions, []));
-            }
-            if (!$subscriptionFeature->adjustments) {
-                $userPermissions = array_values(array_diff($userPermissions, ["manage_adjustments"]));
-            }
-            if (!$subscriptionFeature->roles_permission) {
-                $userPermissions = array_values(array_diff($userPermissions, ["manage_roles"]));
-            }
+        $restrictedPermissions = app(\App\Services\PlanFeatureService::class)->getRestrictedPermissions($user);
+        if (! empty($restrictedPermissions)) {
+            $userPermissions = array_values(array_diff($userPermissions, $restrictedPermissions));
         }
 
         $composerFile = file_get_contents(base_path('composer.json'));

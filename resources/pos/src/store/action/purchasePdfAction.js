@@ -1,3 +1,4 @@
+import { downloadProtectedFile } from '../../shared/downloadProtectedFile';
 import {setLoading} from './loadingAction';
 import apiConfig from '../../config/apiConfig';
 import {apiBaseURL, toastType} from '../../constants';
@@ -8,8 +9,8 @@ export const purchasePdfAction = (purchaseId, isLoading = true) => async (dispat
         dispatch(setLoading(true))
     }
     apiConfig.get(apiBaseURL.PURCHASE_PDF + '/' + purchaseId)
-        .then((response) => {
-            window.open(response.data.data.purchase_pdf_url, '_blank');
+        .then(async (response) => {
+            await downloadProtectedFile(response.data.data.purchase_pdf_url);
             if (isLoading) {
                 dispatch(setLoading(false))
             }
@@ -17,5 +18,9 @@ export const purchasePdfAction = (purchaseId, isLoading = true) => async (dispat
         .catch(({response}) => {
             dispatch(addToast(
                 {text: response?.data?.message, type: toastType.ERROR}));
+
+            if (isLoading) {
+                dispatch(setLoading(false));
+            }
         });
 };

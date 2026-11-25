@@ -22,7 +22,11 @@ class UpdateCouponCodeRequest extends FormRequest
      */
     public function rules(): array
     {
-        $rules = CouponCode::$rules;
+        $rules = \App\Rules\TenantExists::scopeRules(
+            CouponCode::$rules,
+            [],
+            ['products.*' => 'products']
+        );
         $rules['code'] = 'required|unique:coupon_codes,code,'.$this->route('coupon_code')->id;
 
         return $rules;

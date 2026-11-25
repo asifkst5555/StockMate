@@ -27,6 +27,17 @@ const AdjustmentTableBody = (props) => {
         dispatch(addToast({ text: getFormattedMessage("item.deleted.success.message") }));
     };
 
+    const getAvailableStock = () => {
+        const matched = products?.find ? products.find((pro) => pro.id === singleProduct.id) : null;
+        const stockQty = matched?.attributes?.stock?.quantity;
+        if (typeof stockQty === "number") return stockQty;
+        if (typeof singleProduct.stock === "number") return singleProduct.stock;
+        if (Array.isArray(singleProduct.stock) && singleProduct.stock.length > 0 && singleProduct.stock[0]?.quantity !== undefined) {
+            return Number(singleProduct.stock[0].quantity) || 0;
+        }
+        return null;
+    };
+
     const handleChange = (e) => {
         e.preventDefault();
         const { value } = e.target;
@@ -39,21 +50,20 @@ const AdjustmentTableBody = (props) => {
                 return;
             }
         }
+        const numericVal = Number(value);
+        const resolvedStock = getAvailableStock();
         setUpdateProducts((updateProducts) =>
             updateProducts.map((item) => {
                 if (item.id === singleProduct.id) {
-                    const compareQty = products
-                        .filter((pro) => pro.id === singleProduct.id)
-                        .map((pro) => pro.attributes.stock.quantity);
-                    return item.adjustMethod === 2
+                    return item.adjustMethod === 2 && resolvedStock !== null
                         ? {
                               ...item,
                               quantity:
-                                  compareQty[0] < Number(e.target.value)
-                                      ? compareQty[0]
-                                      : Number(e.target.value),
+                                  resolvedStock < numericVal
+                                      ? resolvedStock
+                                      : numericVal,
                           }
-                        : { ...item, quantity: Number(e.target.value) };
+                        : { ...item, quantity: numericVal };
                 } else {
                     return item;
                 }
@@ -62,18 +72,17 @@ const AdjustmentTableBody = (props) => {
     };
 
     const handleIncrement = () => {
+        const resolvedStock = getAvailableStock();
         setUpdateProducts((updateProducts) =>
             updateProducts.map((item) => {
                 if (item.id === singleProduct.id) {
-                    const compareQty = products
-                        .filter((pro) => pro.id === singleProduct.id)
-                        .map((pro) => pro.attributes.stock.quantity)[0];
+                    const currentQty = Number(item.quantity) || 0;
                     return {
                         ...item,
                         quantity:
-                            item.adjustMethod === 2
-                                ? Math.min(compareQty, item.quantity + 1) // Ensure it doesn't exceed stock
-                                : item.quantity + 1,
+                            item.adjustMethod === 2 && resolvedStock !== null
+                                ? Math.min(resolvedStock, currentQty + 1)
+                                : currentQty + 1,
                     };
                 }
                 return item;
@@ -85,9 +94,10 @@ const AdjustmentTableBody = (props) => {
         setUpdateProducts((updateProducts) =>
             updateProducts.map((item) => {
                 if (item.id === singleProduct.id) {
+                    const currentQty = Number(item.quantity) || 0;
                     return {
                         ...item,
-                        quantity: item.quantity > 0 ? item.quantity - 1 : 0, // Ensure it doesn't go below 0
+                        quantity: currentQty > 0 ? currentQty - 1 : 0,
                     };
                 }
                 return item;
@@ -96,31 +106,22 @@ const AdjustmentTableBody = (props) => {
     };
 
     const onMethodChange = (obj) => {
-        setUpdateProducts((updateProducts) =>
-            updateProducts.map((item) =>
-                item.id === singleProduct.id
-                    ? { ...item, adjustMethod: obj.value }
-                    : item
-            )
-        );
-        setUpdateProducts((updateProducts) =>
-            updateProducts.map((item) => {
+        const newMethod = Number(obj.value);
+        const resolvedStock = getAvailableStock();
+        setUpdateProducts((prevProducts) =>
+            prevProducts.map((item) => {
                 if (item.id === singleProduct.id) {
-                    const compareQty = products
-                        .filter((pro) => pro.id === singleProduct.id)
-                        .map((pro) => pro.attributes.stock.quantity);
+                    let nextQty = Number(item.quantity) || 0;
+                    if (newMethod === 2 && resolvedStock !== null && nextQty > resolvedStock) {
+                        nextQty = resolvedStock;
+                    }
                     return {
                         ...item,
-                        quantity:
-                            item.adjustMethod === 2
-                                ? compareQty[0] > item.quantity
-                                    ? item.quantity++ + 0
-                                    : compareQty[0]
-                                : item.quantity++,
+                        adjustMethod: newMethod,
+                        quantity: nextQty,
                     };
-                } else {
-                    return item;
                 }
+                return item;
             })
         );
     };
@@ -136,19 +137,24 @@ const AdjustmentTableBody = (props) => {
                 <h4 className="fs-6 mb-0">{singleProduct.code}</h4>
             </td>
             <td>
-                {singleProduct.isEdit ? (
-                    singleProduct.stock.length >= 1 &&
-                    singleProduct.stock.map((item) => {
-                        return (
-                            <span className="badge bg-light-warning">
-                                <span>
-                                    {item.quantity}&nbsp;
-                                    {singleProduct.short_name}
+                {Array.isArray(singleProduct.stock) ? (
+                    singleProduct.stock.length >= 1 ? (
+                        singleProduct.stock.map((item, stockIdx) => {
+                            return (
+                                <span key={stockIdx} className="badge bg-light-warning">
+                                    <span>
+                                        {item?.quantity ?? 0}&nbsp;
+                                        {singleProduct.short_name}
+                                    </span>
                                 </span>
-                            </span>
-                        );
-                    })
-                ) : singleProduct.stock >= 0 ? (
+                            );
+                        })
+                    ) : (
+                        <span className="badge bg-light-danger">
+                            <span>0&nbsp;{singleProduct.short_name}</span>
+                        </span>
+                    )
+                ) : typeof singleProduct.stock === "number" ? (
                     <span className="badge bg-light-warning">
                         <span>
                             {singleProduct.stock}&nbsp;
@@ -156,7 +162,9 @@ const AdjustmentTableBody = (props) => {
                         </span>
                     </span>
                 ) : (
-                    ""
+                    <span className="badge bg-light-danger">
+                        <span>N/A</span>
+                    </span>
                 )}
             </td>
             <td>

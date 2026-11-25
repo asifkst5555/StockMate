@@ -87,7 +87,6 @@ class Transfer extends BaseModel implements HasMedia, JsonResourceful
     protected $fillable = [
         'tenant_id',
         'date',
-        'date',
         'from_warehouse_id',
         'to_warehouse_id',
         'tax_rate',
@@ -104,13 +103,13 @@ class Transfer extends BaseModel implements HasMedia, JsonResourceful
         'date' => 'date|required',
         'from_warehouse_id' => 'required|exists:warehouses,id',
         'to_warehouse_id' => 'required|exists:warehouses,id',
-        'tax_rate' => 'nullable|numeric',
-        'tax_amount' => 'nullable|numeric',
-        'discount' => 'nullable|numeric',
-        'shipping' => 'nullable|numeric',
-        'grand_total' => 'nullable|numeric',
-        'notes' => 'nullable',
-        'status' => 'integer',
+        'tax_rate' => 'nullable|numeric|min:0|max:100',
+        'tax_amount' => 'nullable|numeric|min:0',
+        'discount' => 'nullable|numeric|min:0',
+        'shipping' => 'nullable|numeric|min:0',
+        'grand_total' => 'nullable|numeric|min:0',
+        'note' => 'nullable|string',
+        'status' => 'required|integer|in:1,2,3',
         'reference_code' => 'nullable',
     ];
 

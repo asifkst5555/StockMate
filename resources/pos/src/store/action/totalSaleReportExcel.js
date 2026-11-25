@@ -1,3 +1,4 @@
+import { downloadProtectedFile } from '../../shared/downloadProtectedFile';
 import apiConfig from '../../config/apiConfig';
 import {toastType} from '../../constants';
 import {addToast} from './toastAction';
@@ -8,8 +9,8 @@ export const totalSaleReportExcel = (dates, setIsWarehouseValue, filter = {}, is
         dispatch(setLoading(true))
     }
     await apiConfig.get(`total-sale-report-excel?start_date=${dates.start_date ? dates.start_date : null }&end_date=${dates.end_date ? dates.end_date : null}`)
-        .then((response) => {
-            window.open(response.data.data.total_sale_excel_url, '_blank');
+        .then(async (response) => {
+            await downloadProtectedFile(response.data.data.total_sale_excel_url);
             setIsWarehouseValue(false);
             if (isLoading) {
                 dispatch(setLoading(false))
@@ -18,5 +19,9 @@ export const totalSaleReportExcel = (dates, setIsWarehouseValue, filter = {}, is
         .catch(({response}) => {
             dispatch(addToast(
                 {text: response?.data?.message, type: toastType.ERROR}));
+
+            if (isLoading) {
+                dispatch(setLoading(false));
+            }
         });
 };

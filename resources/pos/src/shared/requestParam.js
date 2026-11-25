@@ -74,18 +74,23 @@ export default (
             filters.end_date;
     }
 
-    if (filters.status || filters.payment_status || filters.payment_type) {
+    if (filters.status !== undefined && filters.status !== null && filters.status !== '') {
         if (baseUrl.indexOf("?") > 0 || (url.includes("?") && url.length > 1)) {
             url += "&";
         }
-        url =
-            url +
-            "status=" +
-            filters.status +
-            "&payment_status=" +
-            filters.payment_status +
-            "&payment_type=" +
-            filters.payment_type;
+        url += "status=" + filters.status;
+    }
+    if (filters.payment_status !== undefined && filters.payment_status !== null && filters.payment_status !== '') {
+        if (baseUrl.indexOf("?") > 0 || (url.includes("?") && url.length > 1)) {
+            url += "&";
+        }
+        url += "payment_status=" + filters.payment_status;
+    }
+    if (filters.payment_type !== undefined && filters.payment_type !== null && filters.payment_type !== '') {
+        if (baseUrl.indexOf("?") > 0 || (url.includes("?") && url.length > 1)) {
+            url += "&";
+        }
+        url += "payment_type=" + filters.payment_type;
     }
 
     if (filters.product_unit) {
@@ -105,6 +110,18 @@ export default (
             url += "&";
         }
         url = url + "warehouse_id=" + filters.warehouse_id;
+    }
+    if (filters.from_warehouse_id) {
+        if (baseUrl.indexOf("?") > 0 || (url.includes("?") && url.length > 1)) {
+            url += "&";
+        }
+        url = url + "from_warehouse_id=" + filters.from_warehouse_id;
+    }
+    if (filters.to_warehouse_id) {
+        if (baseUrl.indexOf("?") > 0 || (url.includes("?") && url.length > 1)) {
+            url += "&";
+        }
+        url = url + "to_warehouse_id=" + filters.to_warehouse_id;
     }
     if (filters.customer_id) {
         if (baseUrl.indexOf("?") > 0 || (url.includes("?") && url.length > 1)) {

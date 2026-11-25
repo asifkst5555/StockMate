@@ -83,7 +83,7 @@ class ProductRepository extends BaseRepository
             $product = $this->create($input);
             $reference_code = 'PR_' . $product->id;
             $this->generateBarcode($input, $reference_code);
-            $product['barcode_image_url'] = Storage::url('product_barcode/barcode-' . $reference_code . '.png');
+            $product['barcode_image_url'] = app(\App\Services\BarcodeService::class)->resolveProductBarcodeUrl($product);
 
             // create purchase
 
@@ -109,6 +109,19 @@ class ProductRepository extends BaseRepository
                     throw new UnprocessableEntityHttpException('Please Select the status.');
                 }
 
+                $status = (int) $purchaseStock['status'];
+                if (! in_array($status, [Purchase::RECEIVED, Purchase::PENDING, Purchase::ORDERED], true)) {
+                    throw new UnprocessableEntityHttpException('Invalid purchase status.');
+                }
+
+                if (! \App\Models\Warehouse::whereKey($purchaseStock['warehouse_id'])->exists()) {
+                    throw new UnprocessableEntityHttpException('Selected warehouse does not belong to the active store.');
+                }
+                if (! \App\Models\Supplier::whereKey($purchaseStock['supplier_id'])->exists()) {
+                    throw new UnprocessableEntityHttpException('Selected supplier does not belong to the active store.');
+                }
+
+                $purchaseStock['status'] = $status;
                 $purchaseStock['tax_rate'] = 0;
                 $purchaseStock['tax_amount'] = 0;
                 $purchaseStock['discount'] = 0;
@@ -166,9 +179,23 @@ class ProductRepository extends BaseRepository
                     'grand_total' => $purchaseStock['sub_total'],
                 ]);
 
-                // manage stock
-
-                manageStock($purchaseStock['warehouse_id'], $product->id, $purchaseStock['quantity']);
+                // C2-17: Only increment stock when purchase status is RECEIVED, via StockMovementService
+                if ((int) $purchase->status === Purchase::RECEIVED) {
+                    /** @var \App\Services\StockMovementService $stockService */
+                    $stockService = app(\App\Services\StockMovementService::class);
+                    if (! $stockService->hasRecordedMovement('purchase', Purchase::class, (int) $purchase->id, (int) $purchaseStock['warehouse_id'], (int) $product->id)) {
+                        $stockService->increase(
+                            (int) $purchaseStock['warehouse_id'],
+                            (int) $product->id,
+                            (float) $purchaseStock['quantity'],
+                            'purchase',
+                            Purchase::class,
+                            (int) $purchase->id,
+                            (float) $product->product_cost,
+                            'Initial product purchase (' . $purchase->reference_code . ')'
+                        );
+                    }
+                }
             }
         }
             DB::commit();
@@ -188,12 +215,19 @@ class ProductRepository extends BaseRepository
         try {
             DB::beginTransaction();
             $input['expiry_date'] = $input['expiry_date'] ?? null;
+            // Phase B (BAR-05): Never overwrite an existing product_code with SKU when omitted
+            if (empty($input['product_code'])) {
+                unset($input['product_code']);
+            }
             $product = $this->update($input, $id);
 
             $product->clearMediaCollection(Product::PRODUCT_BARCODE_PATH);
             $reference_code = 'PR_' . $product->id;
-            $this->generateBarcode($input, $reference_code);
-            $product['barcode_image_url'] = Storage::url('product_barcode/barcode-' . $reference_code . '.png');
+            $this->generateBarcode([
+                'code' => $input['code'] ?? $product->code,
+                'barcode_symbol' => $input['barcode_symbol'] ?? $product->barcode_symbol ?? Product::CODE128,
+            ], $reference_code);
+            $product['barcode_image_url'] = app(\App\Services\BarcodeService::class)->resolveProductBarcodeUrl($product);
 
             DB::commit();
 
@@ -206,38 +240,16 @@ class ProductRepository extends BaseRepository
 
     public function generateBarcode($input, $reference_code): bool
     {
-        $barcodeType = null;
-        $generator = new BarcodeGeneratorPNG();
-        switch ($input['barcode_symbol']) {
-            case Product::CODE128:
-                $barcodeType = $generator::TYPE_CODE_128;
-                break;
-            case Product::CODE39:
-                $barcodeType = $generator::TYPE_CODE_39;
-                break;
-            case Product::EAN8:
-                $barcodeType = $generator::TYPE_EAN_8;
-                break;
-            case Product::EAN13:
-                $barcodeType = $generator::TYPE_EAN_13;
-                break;
-            case Product::UPC:
-                $barcodeType = $generator::TYPE_UPC_A;
-                break;
-        }
+        $code = (string) ($input['code'] ?? '');
+        $symbol = (int) ($input['barcode_symbol'] ?? Product::CODE128);
 
-        Storage::disk(config('app.media_disc'))->put(
-            'product_barcode/barcode-' . $reference_code . '.png',
-            $generator->getBarcode($input['code'], $barcodeType, 4, 70)
-        );
+        app(\App\Services\BarcodeService::class)->storeBarcodePng($code, $symbol, (string) $reference_code);
 
         return true;
     }
 
-    public function generateBarcodeBase64($code): string
+    public function generateBarcodeBase64($code, int $symbol = Product::CODE128): string
     {
-        $generator = new BarcodeGeneratorPNG();
-        $barcodeData = $generator->getBarcode($code, $generator::TYPE_CODE_128, 4, 70);
-        return 'data:image/png;base64,' . base64_encode($barcodeData);
+        return app(\App\Services\BarcodeService::class)->generateBase64DataUri((string) $code, $symbol);
     }
 }

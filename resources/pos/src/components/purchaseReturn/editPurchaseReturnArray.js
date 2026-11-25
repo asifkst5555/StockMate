@@ -1,14 +1,18 @@
 
 export const editPurchaseReturnArray = (products, warehouse_id, createPurchaseReturn) => {
     let purchaseProductRowArray = [];
+    if (!Array.isArray(products)) {
+        return purchaseProductRowArray;
+    }
     products.forEach(product => {
+        const discountValue = Number(product.discount_value ?? product.discount_vale ?? 0);
         purchaseProductRowArray.push({
-            name: product.product.name,
-            code: product.product.code,
-            product_unit: product.product.product_unit,
+            name: product.product?.name,
+            code: product.product?.code,
+            product_unit: product.product?.product_unit,
             product_id: product.product_id,
-            short_name: product.purchase_unit.short_name,
-            stock_alert: product.product.stock_alert,
+            short_name: product.purchase_unit?.short_name,
+            stock_alert: product.product?.stock_alert,
             product_cost: product.product_cost,
             fix_net_unit : product.product_cost,
             net_unit_cost: product.product_cost,
@@ -16,16 +20,16 @@ export const editPurchaseReturnArray = (products, warehouse_id, createPurchaseRe
             tax_value: product.tax_value,
             tax_amount: product.tax_amount,
             discount_type: product.discount_type,
-            discount_value: product.discount_value,
+            discount_value: discountValue,
             discount_amount: product.discount_amount,
-            purchase_unit:product.purchase_unit.id,
+            purchase_unit: product.purchase_unit?.id,
             quantity: createPurchaseReturn ? 0 : product.quantity,
             sub_total: Number(product.sub_total),
             id: product.id,
-            purchase_return_item_id: product.id,
+            purchase_return_item_id: createPurchaseReturn ? '' : product.id,
             newItem: '',
             isEdit: true,
-            stocks: product.product.stocks.filter(item => item.warehouse_id === warehouse_id)
+            stocks: (product.product?.stocks || []).filter(item => item.warehouse_id === warehouse_id)
         })
     });
     return purchaseProductRowArray;

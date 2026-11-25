@@ -87,6 +87,8 @@ const PosMainPage = (props) => {
     const [newCost, setNewCost] = useState("");
     const [paymentPrint, setPaymentPrint] = useState({});
     const [cashPayment, setCashPayment] = useState(false);
+    const [isSubmittingCheckout, setIsSubmittingCheckout] = useState(false);
+    const checkoutIdempotencyKeyRef = React.useRef(null);
     const [modalShowPaymentSlip, setModalShowPaymentSlip] = useState(false);
     const [modalShowCustomer, setModalShowCustomer] = useState(false);
     const [productMsg, setProductMsg] = useState(0);
@@ -597,15 +599,41 @@ const PosMainPage = (props) => {
         return formValue;
     };
 
-    //cash payment method
-    const onCashPayment = (event,printSlip=false) => {
-        event.preventDefault();
-        const valid = handleValidation();
-        if (valid) {
-            // Capture payment print data BEFORE resetting cashPaymentValue
-            setPaymentPrint(preparePrintData);
+    const generateCheckoutIdempotencyKey = () => {
+        if (typeof window !== "undefined" && window.crypto && typeof window.crypto.randomUUID === "function") {
+            return `pos_${window.crypto.randomUUID()}`;
+        }
+        return `pos_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+    };
 
-            posCashPaymentAction(
+    // Reset checkout idempotency key when cart items or order totals change (new checkout attempt)
+    useEffect(() => {
+        checkoutIdempotencyKeyRef.current = null;
+    }, [updateProducts, cartItemValue, cashPaymentValue]);
+
+    //cash payment method (C1.7 submit lock + idempotency key; C1.8 clear state only after confirmed 2xx)
+    const onCashPayment = async (event, printSlip = false) => {
+        event.preventDefault();
+        if (isSubmittingCheckout) {
+            return;
+        }
+
+        const valid = handleValidation();
+        if (!valid) {
+            return;
+        }
+
+        if (!checkoutIdempotencyKeyRef.current) {
+            checkoutIdempotencyKeyRef.current = generateCheckoutIdempotencyKey();
+        }
+        const idempotencyKey = checkoutIdempotencyKeyRef.current;
+
+        // Capture payment print data BEFORE checkout completes
+        setPaymentPrint(preparePrintData);
+        setIsSubmittingCheckout(true);
+
+        try {
+            await posCashPaymentAction(
                 prepareData(updateProducts),
                 setUpdateProducts,
                 printSlip && setModalShowPaymentSlip,
@@ -614,31 +642,40 @@ const PosMainPage = (props) => {
                     categoryId,
                     selectedOption,
                 },
-                printSlip
+                printSlip,
+                true,
+                {
+                    idempotencyKey,
+                    onSuccess: () => {
+                        checkoutIdempotencyKeyRef.current = null;
+                        setCashPayment(false);
+                        setCartItemValue({
+                            discount_type: discountType.FIXED,
+                            discount_value: 0,
+                            discount: 0,
+                            tax: 0,
+                            shipping: 0,
+                        });
+                        setCashPaymentValue({
+                            notes: "",
+                            payment_status: {
+                                label: getFormattedMessage(
+                                    "globally.detail.paid"
+                                ),
+                                value: 1,
+                            },
+                            payment_details: [{
+                                amount: '',
+                                payment_type: ''
+                            }]
+                        });
+                        dispatch(fetchTax());
+                        setCartProductIds("");
+                    },
+                }
             );
-            setCashPayment(false);
-            setCartItemValue({
-                discount_type: discountType.FIXED,
-                discount_value: 0,
-                discount: 0,
-                tax: 0,
-                shipping: 0,
-            });
-            setCashPaymentValue({
-                notes: "",
-                payment_status: {
-                    label: getFormattedMessage(
-                        "globally.detail.paid"
-                    ),
-                    value: 1,
-                },
-                payment_details: [{
-                    amount: '',
-                    payment_type: ''
-                }]
-            });
-            dispatch(fetchTax());
-            setCartProductIds("");
+        } finally {
+            setIsSubmittingCheckout(false);
         }
     };
 
@@ -999,6 +1036,7 @@ const PosMainPage = (props) => {
                     handlePaymentDetailChange={handlePaymentDetailChange}
                     handleAddPayment={handleAddPayment}
                     handleRemovePayment={handleRemovePayment}
+                    isSubmitting={isSubmittingCheckout}
                 />
             )}
             {lgShow && (

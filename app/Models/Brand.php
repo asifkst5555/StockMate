@@ -61,7 +61,7 @@ class Brand extends BaseModel implements HasMedia, JsonResourceful
     {
         return [
             'name' => 'required|unique:brands,name,NULL,id,tenant_id,' . Auth::user()->tenant_id,
-            'image' => 'image|mimes:jpg,jpeg,png,svg',
+            'image' => 'nullable|file|image|mimes:jpg,jpeg,png,webp,gif|mimetypes:image/jpeg,image/png,image/webp,image/gif|max:2048',
         ];
     }
 

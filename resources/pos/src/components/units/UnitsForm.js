@@ -10,7 +10,7 @@ import {fetchAllBaseUnits} from "../../store/action/baseUnitsAction";
 const UnitsForm = (props) => {
     const {handleClose, base, fetchAllBaseUnits, show, title, addProductData, editUnit, singleUnit,hide } = props;
     const innerRef = createRef();
-    const newUnit = singleUnit && base.filter((da) => singleUnit.base_unit === da.attributes.name);
+    const newUnit = singleUnit && base && Array.isArray(base) ? base.filter((da) => singleUnit.base_unit === da?.attributes?.name) : [];
 
     const [unitValue, setUnitValue] = useState({
         name: singleUnit ? singleUnit.name : '',
@@ -38,7 +38,7 @@ const UnitsForm = (props) => {
 
     useEffect(() => {
         if(singleUnit){
-          const data =  base.filter((da) => Number(singleUnit.base_unit) === da.id);
+          const data = base && Array.isArray(base) ? base.filter((da) => Number(singleUnit.base_unit) === da.id) : [];
             data.length && setUnitValue({
                 name: singleUnit ? singleUnit.name : '',
                 short_name: singleUnit ? singleUnit.short_name : '',
@@ -69,7 +69,8 @@ const UnitsForm = (props) => {
 
     const onChangeInput = (e) => {
         e.preventDefault();
-        setUnitValue(inputs => ({...inputs, [e.target.name]: e.target.value}))
+        const { name, value } = e.target;
+        setUnitValue(inputs => ({...inputs, [name]: value}))
         setErrors('');
     };
 
@@ -113,7 +114,7 @@ const UnitsForm = (props) => {
             base_unit: ''
         });
         setErrors('');
-        handleClose ? handleClose(false) : hide(false)
+        handleClose ? handleClose(false) : hide ? hide(false) : null;
     };
 
     return (

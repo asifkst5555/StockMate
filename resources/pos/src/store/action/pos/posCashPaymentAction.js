@@ -17,31 +17,38 @@ export const posCashPaymentAction =
         setModalShowPaymentSlip,
         filterData,
         printSlip = false,
-        isLoading = true
+        isLoading = true,
+        options = {}
     ) =>
     async (dispatch) => {
         if (isLoading) {
             dispatch(setLoading(true));
         }
-        let url = apiBaseURL.CASH_PAYMENT;
-        apiConfig
-            .post(url, detailsCash)
-            .then((response) => {
-                dispatch({
-                    type: posCashPaymentActionType.POS_CASH_PAYMENT,
-                    payload: response.data.data,
-                });
-                dispatch(
-                    addToast({
-                        text: getFormattedMessage(
-                            "sale.success.create.message"
-                        ),
-                    })
-                );
-                setUpdateProducts([]);
-                if (printSlip) {
-                    setModalShowPaymentSlip(true);
-                }
+
+        const url = apiBaseURL.CASH_PAYMENT;
+        const requestConfig = options?.idempotencyKey
+            ? { headers: { "Idempotency-Key": options.idempotencyKey } }
+            : undefined;
+
+        try {
+            const response = await apiConfig.post(url, detailsCash, requestConfig);
+            dispatch({
+                type: posCashPaymentActionType.POS_CASH_PAYMENT,
+                payload: response.data.data,
+            });
+            dispatch(
+                addToast({
+                    text: getFormattedMessage("sale.success.create.message"),
+                })
+            );
+            setUpdateProducts([]);
+            if (typeof options?.onSuccess === "function") {
+                options.onSuccess(response.data.data);
+            }
+            if (printSlip && typeof setModalShowPaymentSlip === "function") {
+                setModalShowPaymentSlip(true);
+            }
+            if (filterData?.selectedOption?.value) {
                 dispatch(
                     fetchBrandClickable(
                         filterData.brandId,
@@ -49,17 +56,26 @@ export const posCashPaymentAction =
                         filterData.selectedOption.value
                     )
                 );
-                if (isLoading) {
-                    dispatch(setLoading(false));
-                    dispatch(fetchHoldLists());
-                }
-            })
-            .catch((response) => {
-                dispatch(
-                    addToast({
-                        text: response?.response?.data?.message,
-                        type: toastType.ERROR,
-                    })
-                );
-            });
+            }
+            if (isLoading) {
+                dispatch(setLoading(false));
+                dispatch(fetchHoldLists());
+            }
+            return true;
+        } catch (error) {
+            const errorMessage =
+                error?.response?.data?.message ||
+                error?.message ||
+                "Checkout failed. Please try again.";
+            dispatch(
+                addToast({
+                    text: errorMessage,
+                    type: toastType.ERROR,
+                })
+            );
+            if (isLoading) {
+                dispatch(setLoading(false));
+            }
+            return false;
+        }
     };

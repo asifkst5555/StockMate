@@ -121,11 +121,14 @@ const CashPaymentModel = (props) => {
     );
 
     const handleSave = (event, shouldPrint = false) => {
+        if (props.isSubmitting) {
+            return;
+        }
         if (
             cashPaymentValue?.payment_status?.value == paymentStatusOptionsConstant.PAID ||
             cashPaymentValue?.payment_status?.value == paymentStatusOptionsConstant.PARTIAL
         ) {
-            const { paymentErrors } = validatePaymentDetails();
+            const paymentErrors = validatePaymentDetails();
 
             const hasErrors = paymentErrors?.some(error => Object.keys(error).length > 0);
             if (hasErrors) {
@@ -557,15 +560,26 @@ const CashPaymentModel = (props) => {
                 </div>
             </Modal.Body>
             <Modal.Footer className="mt-0">
-                <button className="btn btn-primary" type="button" onClick={(e) => handleSave(e)}>
+                <button
+                    className="btn btn-primary"
+                    type="button"
+                    disabled={Boolean(props.isSubmitting)}
+                    onClick={(e) => handleSave(e)}
+                >
                     {getFormattedMessage("globally.submit-btn")}
                 </button>
-                <button className="btn btn-primary" type="button" onClick={(e) => handleSave(e, true)}>
+                <button
+                    className="btn btn-primary"
+                    type="button"
+                    disabled={Boolean(props.isSubmitting)}
+                    onClick={(e) => handleSave(e, true)}
+                >
                     {getFormattedMessage("globally.submit-and-print-button")}
                 </button>
                 <button
                     type="button"
                     className="btn btn-secondary me-0"
+                    disabled={Boolean(props.isSubmitting)}
                     onClick={handleCashPayment}
                 >
                     {getFormattedMessage("globally.cancel-btn")}

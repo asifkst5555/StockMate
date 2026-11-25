@@ -80,12 +80,23 @@ const AdjustmentForm = (props) => {
     const handleValidation = () => {
         let error = {};
         let isValid = false;
-        const qtyCart = updateProducts.filter((a) => a.quantity === 0);
-        if (!adjustMentValue.date) {
+        const qtyCart = updateProducts.filter((a) => !a.quantity || Number(a.quantity) <= 0 || isNaN(Number(a.quantity)));
+        const productIds = updateProducts.map((p) => p.product_id || p.id);
+        const hasDuplicates = new Set(productIds).size !== productIds.length;
+        if (!adjustMentValue.date || !moment(adjustMentValue.date).isValid()) {
             error["date"] = getFormattedMessage("globally.date.validate.label");
         } else if (!adjustMentValue.warehouse_id) {
             error["warehouse_id"] = getFormattedMessage(
                 "product.input.warehouse.validate.label"
+            );
+        } else if (updateProducts.length < 1) {
+            dispatch(
+                addToast({
+                    text: getFormattedMessage(
+                        "purchase.product-list.validate.message"
+                    ),
+                    type: toastType.ERROR,
+                })
             );
         } else if (qtyCart.length > 0) {
             dispatch(
@@ -96,11 +107,11 @@ const AdjustmentForm = (props) => {
                     type: toastType.ERROR,
                 })
             );
-        } else if (updateProducts.length < 1) {
+        } else if (hasDuplicates) {
             dispatch(
                 addToast({
                     text: getFormattedMessage(
-                        "purchase.product-list.validate.message"
+                        "globally.product-already-added.validate.message"
                     ),
                     type: toastType.ERROR,
                 })
@@ -126,17 +137,17 @@ const AdjustmentForm = (props) => {
 
     const prepareFormData = (prepareData) => {
         const formValue = {
-            date: moment(prepareData.date).locale('en').toDate(),
-            warehouse_id: prepareData.warehouse_id.value
+            date: moment(prepareData.date).locale('en').format('YYYY-MM-DD'),
+            warehouse_id: prepareData.warehouse_id?.value
                 ? prepareData.warehouse_id.value
                 : prepareData.warehouse_id,
-            note: prepareData.notes,
+            note: prepareData.notes || '',
             adjustment_items: updateProducts.map((item) => {
                 return {
                     product_id: item.product_id,
-                    quantity: item.quantity,
-                    method_type: item.adjustMethod,
-                    adjustment_item_id: item.adjustment_item_id,
+                    quantity: Number(item.quantity),
+                    method_type: Number(item.adjustMethod) || 1,
+                    adjustment_item_id: item.adjustment_item_id || '',
                 };
             }),
         };

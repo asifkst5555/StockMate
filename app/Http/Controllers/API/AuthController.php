@@ -287,6 +287,8 @@ class AuthController extends AppBaseController
                     'plan_id' => $plan->id,
                     'user_id' => $user->id,
                     'payment_type' => Subscription::TYPE_FREE,
+                    'status' => Subscription::ACTIVE,
+                    'admin_assigned' => true,
                 ]);
             }
 

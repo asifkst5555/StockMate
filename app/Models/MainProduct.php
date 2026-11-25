@@ -34,7 +34,7 @@ class MainProduct extends Model implements HasMedia, JsonResourceful
     protected $appends = ['image_url'];
 
     public static $rules = [
-        'images.*' => 'image|mimes:jpg,jpeg,png,svg',
+        'images.*' => 'file|image|mimes:jpg,jpeg,png,webp,gif|mimetypes:image/jpeg,image/png,image/webp,image/gif|max:2048',
     ];
 
     protected $casts = [

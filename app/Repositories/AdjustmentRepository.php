@@ -5,9 +5,15 @@ namespace App\Repositories;
 use App\Models\Adjustment;
 use App\Models\AdjustmentItem;
 use App\Models\ManageStock;
+use App\Models\Product;
+use App\Models\Warehouse;
+use App\Services\StockMovementService;
 use Exception;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
@@ -54,96 +60,78 @@ class AdjustmentRepository extends BaseRepository
         try {
             DB::beginTransaction();
 
-            $input['total_products'] = count($input['adjustment_items']);
+            $whId = (int) ($input['warehouse_id'] ?? 0);
+            $warehouse = Warehouse::whereKey($whId)->first();
+            if (! $warehouse) {
+                throw new UnprocessableEntityHttpException('Selected warehouse does not belong to the active store.');
+            }
+
+            $itemsInput = $input['adjustment_items'] ?? [];
+            if (! is_array($itemsInput) || empty($itemsInput)) {
+                throw new UnprocessableEntityHttpException('At least one adjustment item is required.');
+            }
+
+            $input['total_products'] = count($itemsInput);
             $input['date'] = $input['date'] ?? date('Y/m/d');
-            $adjustmentInputArray = Arr::only($input, [
-                'date',
-                'warehouse_id',
-                'total_products',
-            ]);
+            $adjustmentInputArray = [
+                'tenant_id' => $warehouse->tenant_id,
+                'date' => $input['date'],
+                'warehouse_id' => $whId,
+                'total_products' => $input['total_products'],
+            ];
             $adjustment = Adjustment::create($adjustmentInputArray);
             $reference_code = 'AD_111' . $adjustment->id;
             $adjustment->update(['reference_code' => $reference_code]);
 
-            $adjustment = $this->storeAdjustmentItems($adjustment, $input);
+            $adjustment = $this->storeAdjustmentItems($adjustment, $input, $warehouse);
 
             DB::commit();
 
             return $adjustment;
+        } catch (ModelNotFoundException|HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
         }
     }
 
-    public function storeAdjustmentItems($adjustment, $input)
+    public function storeAdjustmentItems($adjustment, $input, ?Warehouse $warehouse = null)
     {
-        foreach ($input['adjustment_items'] as $adjustmentItem) {
-            $adjustmentItem['adjustment_id'] = $adjustment->id;
-            AdjustmentItem::Create($adjustmentItem);
+        /** @var StockMovementService $stockService */
+        $stockService = app(StockMovementService::class);
+        $warehouse = $warehouse ?: Warehouse::withoutGlobalScope('tenant')->findOrFail((int) $adjustment->warehouse_id);
 
-            $product = ManageStock::whereWarehouseId($adjustment->warehouse_id)
-                ->whereProductId($adjustmentItem['product_id'])
-                ->lockForUpdate()
-                ->first();
-            $qty = (float) $adjustmentItem['quantity'];
-            if (! empty($product)) {
-                $beforeQty = (float) $product->quantity;
-                if ($adjustmentItem['method_type'] == AdjustmentItem::METHOD_ADDITION) {
-                    $totalQuantity = $beforeQty + $qty;
-                    $product->update([
-                        'quantity' => $totalQuantity,
-                    ]);
-                    recordStockMovement(
-                        (int) $adjustment->warehouse_id,
-                        (int) $adjustmentItem['product_id'],
-                        'adjustment_add',
-                        $qty,
-                        $beforeQty,
-                        $totalQuantity,
-                        Adjustment::class,
-                        $adjustment->id
-                    );
-                } else {
-                    $totalQuantity = $beforeQty - $qty;
-                    if ($totalQuantity < 0) {
-                        throw new UnprocessableEntityHttpException('Quantity exceeds quantity available in stock.');
-                    }
-                    $product->update([
-                        'quantity' => $totalQuantity,
-                    ]);
-                    recordStockMovement(
-                        (int) $adjustment->warehouse_id,
-                        (int) $adjustmentItem['product_id'],
-                        'adjustment_sub',
-                        -$qty,
-                        $beforeQty,
-                        $totalQuantity,
-                        Adjustment::class,
-                        $adjustment->id
-                    );
-                }
-            } else {
-                if ($adjustmentItem['method_type'] == AdjustmentItem::METHOD_ADDITION) {
-                    ManageStock::create([
-                        'warehouse_id' => $adjustment->warehouse_id,
-                        'product_id' => $adjustmentItem['product_id'],
-                        'quantity' => $qty,
-                    ]);
-                    recordStockMovement(
-                        (int) $adjustment->warehouse_id,
-                        (int) $adjustmentItem['product_id'],
-                        'adjustment_add',
-                        $qty,
-                        0.0,
-                        $qty,
-                        Adjustment::class,
-                        $adjustment->id
-                    );
-                } else {
-                    throw new UnprocessableEntityHttpException('Quantity exceeds quantity available in stock.');
-                }
+        $this->validateAndLoadProducts($input['adjustment_items'], (string) $warehouse->tenant_id, $stockService);
+
+        $pairs = [];
+        foreach ($input['adjustment_items'] as $adjustmentItem) {
+            $pairs[] = ['warehouse_id' => (int) $adjustment->warehouse_id, 'product_id' => (int) $adjustmentItem['product_id']];
+        }
+        $stockService->lockStockRows($pairs);
+
+        foreach ($input['adjustment_items'] as $adjustmentItem) {
+            $qty = $stockService->assertPositiveQuantity($adjustmentItem['quantity'] ?? null, 'Adjustment quantity must be greater than zero.');
+            $methodType = (int) ($adjustmentItem['method_type'] ?? 0);
+            if (! in_array($methodType, [AdjustmentItem::METHOD_ADDITION, AdjustmentItem::METHOD_SUBTRACTION], true)) {
+                throw new UnprocessableEntityHttpException('Invalid adjustment method type.');
             }
+
+            AdjustmentItem::create([
+                'adjustment_id' => $adjustment->id,
+                'product_id' => (int) $adjustmentItem['product_id'],
+                'method_type' => $methodType,
+                'quantity' => $qty,
+            ]);
+
+            $stockService->adjust(
+                (int) $adjustment->warehouse_id,
+                (int) $adjustmentItem['product_id'],
+                $qty,
+                $methodType,
+                (int) $adjustment->id
+            );
         }
 
         return $adjustment;
@@ -154,118 +142,210 @@ class AdjustmentRepository extends BaseRepository
         try {
             DB::beginTransaction();
 
-            $adjustment = Adjustment::findOrFail($id);
+            $adjustment = Adjustment::with('adjustmentItems')->whereKey($id)->lockForUpdate()->firstOrFail();
 
-            $input['total_products'] = count($input['adjustment_items']);
+            if (isset($input['warehouse_id']) && (int) $input['warehouse_id'] !== (int) $adjustment->warehouse_id) {
+                throw new UnprocessableEntityHttpException('Changing adjustment warehouse on update is not supported; delete and create a new adjustment instead.');
+            }
+
+            $warehouse = Warehouse::whereKey((int) $adjustment->warehouse_id)->first();
+            if (! $warehouse) {
+                throw new UnprocessableEntityHttpException('Selected warehouse does not belong to the active store.');
+            }
+
+            $itemsInput = $input['adjustment_items'] ?? [];
+            if (! is_array($itemsInput) || empty($itemsInput)) {
+                throw new UnprocessableEntityHttpException('At least one adjustment item is required.');
+            }
+
+            $input['total_products'] = count($itemsInput);
             $input['date'] = $input['date'] ?? date('Y/m/d');
             $adjustmentInputArray = Arr::only($input, [
                 'date',
-                'warehouse_id',
                 'total_products',
             ]);
             $adjustment->update($adjustmentInputArray);
 
-            $adjustment = $this->updateAdjustmentItems($adjustment, $input);
+            $adjustment = $this->updateAdjustmentItems($adjustment, $input, $warehouse);
 
             DB::commit();
 
             return $adjustment;
+        } catch (ModelNotFoundException|HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
         }
     }
 
-    public function updateAdjustmentItems($adjustment, $input)
+    public function updateAdjustmentItems($adjustment, $input, ?Warehouse $warehouse = null)
     {
-        $adjustmentItmOldIds = AdjustmentItem::whereAdjustmentId($adjustment->id)->pluck('id')->toArray();
-        $adjustmentItemIds = [];
+        /** @var StockMovementService $stockService */
+        $stockService = app(StockMovementService::class);
+        $adjustment->loadMissing('adjustmentItems');
+        $warehouse = $warehouse ?: Warehouse::withoutGlobalScope('tenant')->findOrFail((int) $adjustment->warehouse_id);
 
-        foreach ($input['adjustment_items'] as $key => $adjustmentItem) {
-            $adjustmentItemIds[$key] = $adjustmentItem['adjustment_item_id'];
+        $this->validateAndLoadProducts($input['adjustment_items'], (string) $warehouse->tenant_id, $stockService);
 
-            $product = ManageStock::whereWarehouseId($adjustment->warehouse_id)->whereProductId($adjustmentItem['product_id'])->first();
+        $existingItemsById = $adjustment->adjustmentItems->keyBy('id');
+        $seenChildIds = [];
+        $keptItemIds = [];
 
-            if (is_null($adjustmentItem['adjustment_item_id'])) {
-                $adjustmentItem['adjustment_id'] = $adjustment->id;
-
-                AdjustmentItem::Create($adjustmentItem);
-
-                if (! empty($product)) {
-                    if ($adjustmentItem['method_type'] == AdjustmentItem::METHOD_ADDITION) {
-                        $totalQuantity = $product->quantity + $adjustmentItem['quantity'];
-                        $product->update([
-                            'quantity' => $totalQuantity,
-                        ]);
-                    } else {
-                        $totalQuantity = $product->quantity - $adjustmentItem['quantity'];
-                        if ($totalQuantity < 0) {
-                            throw new UnprocessableEntityHttpException('Quantity exceeds quantity available in stock.');
-                        }
-                        $product->update([
-                            'quantity' => $totalQuantity,
-                        ]);
-                    }
-                } else {
-                    if ($adjustmentItem['method_type'] == AdjustmentItem::METHOD_ADDITION) {
-                        ManageStock::create([
-                            'warehouse_id' => $adjustment->warehouse_id,
-                            'product_id' => $adjustmentItem['product_id'],
-                            'quantity' => $adjustmentItem['quantity'],
-                        ]);
-                    }
-                }
-            } else {
-                $exitAdjustmentItem = AdjustmentItem::whereId($adjustmentItem['adjustment_item_id'])->firstOrFail();
-
-                if ($exitAdjustmentItem['method_type'] == AdjustmentItem::METHOD_ADDITION) {
-                    $existQuantity = $product->quantity - $exitAdjustmentItem->quantity;
-                } else {
-                    $existQuantity = $product->quantity + $exitAdjustmentItem->quantity;
-                }
-
-                if ($adjustmentItem['method_type'] == AdjustmentItem::METHOD_ADDITION) {
-                    $totalQuantity = $existQuantity + $adjustmentItem['quantity'];
-                    $product->update([
-                        'quantity' => $totalQuantity,
-                    ]);
-                } else {
-                    $totalQuantity = $existQuantity - $adjustmentItem['quantity'];
-                    if ($totalQuantity < 0) {
-                        throw new UnprocessableEntityHttpException('Quantity exceeds quantity available in stock.');
-                    }
-                    $product->update([
-                        'quantity' => $totalQuantity,
-                    ]);
-                }
-
-                $exitAdjustmentItem->update([
-                    'quantity' => $adjustmentItem['quantity'],
-                    'method_type' => $adjustmentItem['method_type'],
-                ]);
+        foreach ($input['adjustment_items'] as $adjustmentItem) {
+            $rawItemId = $adjustmentItem['adjustment_item_id'] ?? null;
+            if ($rawItemId === null || $rawItemId === '') {
+                continue;
             }
+            if (! is_numeric($rawItemId) || (int) $rawItemId <= 0 || (string) (int) $rawItemId !== (string) $rawItemId) {
+                throw new UnprocessableEntityHttpException('Invalid adjustment item ID.');
+            }
+            $childId = (int) $rawItemId;
+            if (isset($seenChildIds[$childId])) {
+                throw new UnprocessableEntityHttpException('Duplicate adjustment item IDs are not permitted.');
+            }
+            $seenChildIds[$childId] = true;
+
+            /** @var AdjustmentItem|null $existingItem */
+            $existingItem = $existingItemsById->get($childId);
+            if (! $existingItem) {
+                throw new UnprocessableEntityHttpException('Adjustment item not found or does not belong to this adjustment.');
+            }
+            if ((int) $adjustmentItem['product_id'] !== (int) $existingItem->product_id) {
+                throw new UnprocessableEntityHttpException('Changing product on an existing adjustment item is not supported; remove the line and add the new product instead.');
+            }
+            $keptItemIds[] = $childId;
         }
 
-        $removeItemIds = array_diff($adjustmentItmOldIds, $adjustmentItemIds);
+        // Lock ALL involved (warehouse_id, product_id) rows upfront: existing/removed stored product_ids + incoming product_ids
+        $pairs = [];
+        foreach ($adjustment->adjustmentItems as $existingItem) {
+            $pairs[] = ['warehouse_id' => (int) $adjustment->warehouse_id, 'product_id' => (int) $existingItem->product_id];
+        }
+        foreach ($input['adjustment_items'] as $item) {
+            $pairs[] = ['warehouse_id' => (int) $adjustment->warehouse_id, 'product_id' => (int) $item['product_id']];
+        }
+        $stockService->lockStockRows($pairs);
 
-        if (! empty(array_values($removeItemIds))) {
+        $adjustmentItmOldIds = $existingItemsById->keys()->map(fn ($v) => (int) $v)->all();
+        $removeItemIds = array_values(array_diff($adjustmentItmOldIds, $keptItemIds));
+
+        if (! empty($removeItemIds)) {
             foreach ($removeItemIds as $removeItemId) {
-                $oldItem = AdjustmentItem::whereId($removeItemId)->firstOrFail();
-                $existProductStock = ManageStock::whereWarehouseId($adjustment->warehouse_id)->whereProductId($oldItem->product_id)->first();
+                /** @var AdjustmentItem $oldItem */
+                $oldItem = $existingItemsById->get($removeItemId);
+                $reverseDelta = ((int) $oldItem->method_type === AdjustmentItem::METHOD_ADDITION)
+                    ? -(float) $oldItem->quantity
+                    : (float) $oldItem->quantity;
 
-                if ($oldItem->method_type == AdjustmentItem::METHOD_ADDITION) {
-                    $totalQuantity = $existProductStock->quantity - $oldItem['quantity'];
-                } else {
-                    $totalQuantity = $existProductStock->quantity + $oldItem['quantity'];
-                }
+                $stockService->reverse(
+                    (int) $adjustment->warehouse_id,
+                    (int) $oldItem->product_id,
+                    $reverseDelta,
+                    'adjustment_update_reversal',
+                    Adjustment::class,
+                    (int) $adjustment->id,
+                    null,
+                    'Adjustment item removed (' . ($adjustment->reference_code ?? ('#' . $adjustment->id)) . ')',
+                    'Cannot remove adjustment item: insufficient stock available to reverse addition.'
+                );
+            }
+            $adjustment->adjustmentItems()->whereIn('id', $removeItemIds)->delete();
+        }
 
-                $existProductStock->update([
-                    'quantity' => $totalQuantity,
+        foreach ($input['adjustment_items'] as $adjustmentItem) {
+            $rawItemId = $adjustmentItem['adjustment_item_id'] ?? null;
+            $qty = $stockService->assertPositiveQuantity($adjustmentItem['quantity'] ?? null, 'Adjustment quantity must be greater than zero.');
+            $newMethod = (int) ($adjustmentItem['method_type'] ?? 0);
+            if (! in_array($newMethod, [AdjustmentItem::METHOD_ADDITION, AdjustmentItem::METHOD_SUBTRACTION], true)) {
+                throw new UnprocessableEntityHttpException('Invalid adjustment method type.');
+            }
+
+            if ($rawItemId === null || $rawItemId === '') {
+                AdjustmentItem::create([
+                    'adjustment_id' => $adjustment->id,
+                    'product_id' => (int) $adjustmentItem['product_id'],
+                    'method_type' => $newMethod,
+                    'quantity' => $qty,
+                ]);
+
+                $stockService->adjust(
+                    (int) $adjustment->warehouse_id,
+                    (int) $adjustmentItem['product_id'],
+                    $qty,
+                    $newMethod,
+                    (int) $adjustment->id,
+                    'Adjustment item added (' . ($adjustment->reference_code ?? ('#' . $adjustment->id)) . ')'
+                );
+            } else {
+                /** @var AdjustmentItem $exitAdjustmentItem */
+                $exitAdjustmentItem = $existingItemsById->get((int) $rawItemId);
+
+                $oldSigned = ((int) $exitAdjustmentItem->method_type === AdjustmentItem::METHOD_ADDITION)
+                    ? (float) $exitAdjustmentItem->quantity
+                    : -(float) $exitAdjustmentItem->quantity;
+
+                $newSigned = ($newMethod === AdjustmentItem::METHOD_ADDITION) ? $qty : -$qty;
+                $netDelta = $newSigned - $oldSigned;
+
+                $stockService->applyDelta(
+                    (int) $adjustment->warehouse_id,
+                    (int) $exitAdjustmentItem->product_id,
+                    $netDelta,
+                    $netDelta >= 0 ? 'adjustment_add' : 'adjustment_sub',
+                    Adjustment::class,
+                    (int) $adjustment->id,
+                    null,
+                    'Adjustment item updated (' . ($adjustment->reference_code ?? ('#' . $adjustment->id)) . ')',
+                    'Quantity exceeds quantity available in stock.'
+                );
+
+                $exitAdjustmentItem->update([
+                    'quantity' => $qty,
+                    'method_type' => $newMethod,
                 ]);
             }
-            AdjustmentItem::whereIn('id', array_values($removeItemIds))->delete();
         }
 
         return $adjustment;
+    }
+
+    /**
+     * @return array<int, Product>
+     */
+    private function validateAndLoadProducts(array $itemsInput, string $tenantId, StockMovementService $stockService): array
+    {
+        $productsById = [];
+        $seenProductIds = [];
+
+        foreach ($itemsInput as $adjustmentItem) {
+            $stockService->assertPositiveQuantity($adjustmentItem['quantity'] ?? null, 'Adjustment quantity must be greater than zero.');
+            $methodType = (int) ($adjustmentItem['method_type'] ?? 0);
+            if (! in_array($methodType, [AdjustmentItem::METHOD_ADDITION, AdjustmentItem::METHOD_SUBTRACTION], true)) {
+                throw new UnprocessableEntityHttpException('Invalid adjustment method type.');
+            }
+
+            $pid = (int) ($adjustmentItem['product_id'] ?? 0);
+            if ($pid <= 0) {
+                throw new UnprocessableEntityHttpException('Selected adjustment product does not belong to the active store.');
+            }
+            if (isset($seenProductIds[$pid])) {
+                throw new UnprocessableEntityHttpException('Duplicate product lines are not permitted in an adjustment.');
+            }
+            $seenProductIds[$pid] = true;
+
+            $productModel = Product::whereKey($pid)->first();
+            if (! $productModel || (string) $productModel->tenant_id !== $tenantId) {
+                throw new UnprocessableEntityHttpException('Selected adjustment product does not belong to the active store.');
+            }
+
+            $submittedUnit = $adjustmentItem['sale_unit'] ?? ($adjustmentItem['purchase_unit'] ?? null);
+            $stockService->assertSupportedUnitParity($productModel, $submittedUnit, 'sale');
+
+            $productsById[$pid] = $productModel;
+        }
+
+        return $productsById;
     }
 }

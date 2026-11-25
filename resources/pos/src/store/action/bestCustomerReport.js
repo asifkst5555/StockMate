@@ -1,3 +1,4 @@
+import { downloadProtectedFile } from '../../shared/downloadProtectedFile';
 import { setLoading } from "./loadingAction";
 import { apiBaseURL, bestCustomerActionType, toastType } from "../../constants";
 import apiConfig from "../../config/apiConfig";
@@ -24,7 +25,7 @@ export const bestCustomerReportAction =
         }
         apiConfig
             .get(url)
-            .then((response) => {
+            .then(async (response) => {
                 if (isLoading) {
                     dispatch(setLoading(false));
                 }
@@ -59,11 +60,8 @@ export const bestCustomerPdfAction =
         }
         apiConfig
             .get(apiBaseURL.BEST_CUSTOMERS_REPORT_PDF)
-            .then((response) => {
-                window.open(
-                    response.data.data.best_customers_pdf_url,
-                    "_blank"
-                );
+            .then(async (response) => {
+                await downloadProtectedFile(response.data.data.best_customers_pdf_url);
                 if (isLoading) {
                     dispatch(setLoading(false));
                 }
@@ -73,7 +71,11 @@ export const bestCustomerPdfAction =
                     addToast({
                         text: response?.data?.message,
                         type: toastType.ERROR,
-                    })
+
+                if (isLoading) {
+                    dispatch(setLoading(false));
+                }
+            })
                 );
             });
     };

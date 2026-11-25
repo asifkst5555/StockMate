@@ -52,7 +52,7 @@ class FrontCMSAPIController extends AppBaseController
     public function updateHeroSection(Request $request)
     {
         $validated = $request->validate([
-            'hero_image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'hero_image' => 'nullable|file|image|mimes:jpeg,png,jpg,webp,gif|mimetypes:image/jpeg,image/png,image/webp,image/gif|max:2048',
             'hero_title' => 'required',
             'hero_description' => 'required',
             'partner_main_title' => 'required',
@@ -117,7 +117,7 @@ class FrontCMSAPIController extends AppBaseController
         $validated = $request->validate([
             'title' => 'required',
             'description' => 'required',
-            'icon' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'icon' => 'nullable|file|image|mimes:jpeg,png,jpg,webp,gif|mimetypes:image/jpeg,image/png,image/webp,image/gif|max:2048',
         ]);
 
 

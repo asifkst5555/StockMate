@@ -254,8 +254,8 @@ const ProductForm = (props) => {
                 barcode_symbol: selectedBarcode,
                 product_unit: singleProduct
                     ? {
-                        value: productUnit[0]?.id,
-                        label: productUnit[0]?.attributes.name,
+                        value: productUnit?.[0]?.id,
+                        label: productUnit?.[0]?.attributes?.name,
                     }
                     : "",
                 sale_unit: singleProduct ? singleProduct[0].sale_unit : "",
@@ -289,6 +289,8 @@ const ProductForm = (props) => {
         setMultipleFiles([]);
     };
 
+    const extractUnitId = (unit) => unit && (Array.isArray(unit) ? (unit[0]?.value ?? unit[0]?.id ?? unit[0]) : (unit?.value ?? unit?.id ?? unit));
+
     const handleProductUnitChange = (obj) => {
         productUnitDropdown(obj.value);
         setIsClearDropdown(false);
@@ -299,14 +301,56 @@ const ProductForm = (props) => {
 
     const handleSaleUnitChange = (obj) => {
         setIsClearDropdown(true);
-        setProductValue({ ...productValue, sale_unit: obj });
-        setErrors({});
+        const newSaleId = obj?.value ?? obj?.id ?? obj;
+        const currentPurchaseId = extractUnitId(productValue.purchase_unit);
+
+        let updatedPurchaseUnit = productValue.purchase_unit;
+        if (!currentPurchaseId || isDropdown === false) {
+            updatedPurchaseUnit = obj;
+            setIsDropdown(true);
+        }
+
+        setProductValue({
+            ...productValue,
+            sale_unit: obj,
+            purchase_unit: updatedPurchaseUnit
+        });
+
+        const effectivePurchaseId = extractUnitId(updatedPurchaseUnit);
+        if (effectivePurchaseId && newSaleId && String(effectivePurchaseId) !== String(newSaleId)) {
+            setErrors({
+                sale_unit: "Purchase Unit and Sale Unit must match. Unit conversion is not currently supported."
+            });
+        } else {
+            setErrors({});
+        }
     };
 
     const handlePurchaseUnitChange = (obj) => {
         setIsDropdown(true);
-        setProductValue({ ...productValue, purchase_unit: obj });
-        setErrors({});
+        const newPurchaseId = obj?.value ?? obj?.id ?? obj;
+        const currentSaleId = extractUnitId(productValue.sale_unit);
+
+        let updatedSaleUnit = productValue.sale_unit;
+        if (!currentSaleId || isClearDropdown === false) {
+            updatedSaleUnit = obj;
+            setIsClearDropdown(true);
+        }
+
+        setProductValue({
+            ...productValue,
+            purchase_unit: obj,
+            sale_unit: updatedSaleUnit
+        });
+
+        const effectiveSaleId = extractUnitId(updatedSaleUnit);
+        if (effectiveSaleId && newPurchaseId && String(effectiveSaleId) !== String(newPurchaseId)) {
+            setErrors({
+                sale_unit: "Purchase Unit and Sale Unit must match. Unit conversion is not currently supported."
+            });
+        } else {
+            setErrors({});
+        }
     };
 
     const onBrandChange = (obj) => {
@@ -622,6 +666,12 @@ const ProductForm = (props) => {
             errorss["purchase_unit"] = getFormattedMessage(
                 "product.input.purchase-unit.validate.label"
             );
+        } else if (
+            extractUnitId(productValue["sale_unit"]) &&
+            extractUnitId(productValue["purchase_unit"]) &&
+            String(extractUnitId(productValue["sale_unit"])) !== String(extractUnitId(productValue["purchase_unit"]))
+        ) {
+            errorss["sale_unit"] = "Purchase Unit and Sale Unit must match. Unit conversion is not currently supported.";
         } else if (
             productValue["notes"] &&
             productValue["notes"].length > 100

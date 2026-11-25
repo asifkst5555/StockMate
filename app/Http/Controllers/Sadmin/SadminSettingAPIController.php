@@ -93,14 +93,17 @@ class SadminSettingAPIController extends AppBaseController
             'stripe_enabled',
             'stripe_key',
             'stripe_secret',
+            'stripe_webhook_secret',
             'stripe_mode',
             'paypal_enabled',
             'paypal_client_id',
             'paypal_secret',
+            'paypal_webhook_id',
             'paypal_mode',
             'razorpay_enabled',
             'razorpay_key',
             'razorpay_secret',
+            'razorpay_webhook_secret',
             'razorpay_mode',
             'paystack_enabled',
             'paystack_key',
@@ -110,6 +113,21 @@ class SadminSettingAPIController extends AppBaseController
 
         $settings = SadminSetting::whereIn('key', $keyName)->pluck('value', 'key')->toArray();
 
+        // SEC-A3/F-02: Never expose plaintext gateway or webhook secrets in JSON API responses
+        $secretKeys = [
+            'stripe_secret',
+            'stripe_webhook_secret',
+            'paypal_secret',
+            'paypal_webhook_id',
+            'razorpay_secret',
+            'razorpay_webhook_secret',
+            'paystack_secret',
+        ];
+        foreach ($secretKeys as $secretKey) {
+            $settings[$secretKey . '_configured'] = ! empty($settings[$secretKey]);
+            $settings[$secretKey] = '';
+        }
+
         return $this->sendResponse(
             new SettingResource(['type' => 'settings', 'attributes' => $settings]),
             'Payment Setting retrieved successfully.'
@@ -118,25 +136,40 @@ class SadminSettingAPIController extends AppBaseController
 
     public function updatePaymentSettings(Request $request): JsonResponse
     {
+        // F-02: Allow blank/masked secret submissions when an existing secret is already configured
+        $existingSecrets = SadminSetting::whereIn('key', [
+            'stripe_secret',
+            'paypal_secret',
+            'razorpay_secret',
+            'paystack_secret',
+        ])->pluck('value', 'key')->toArray();
+
+        $secretRule = fn (string $enabledField, string $key): string => ! empty($existingSecrets[$key])
+            ? 'nullable|string'
+            : "required_if:{$enabledField},1|nullable|string";
+
         $validated = $request->validate(
             [
                 'manual_payment_enabled' => 'boolean',
                 'manual_payment_guide' => 'required_if:manual_payment_enabled,1',
                 'stripe_enabled' => 'boolean',
                 'stripe_key' => 'required_if:stripe_enabled,1',
-                'stripe_secret' => 'required_if:stripe_enabled,1',
+                'stripe_secret' => $secretRule('stripe_enabled', 'stripe_secret'),
+                'stripe_webhook_secret' => 'nullable|string',
                 'stripe_mode' => 'required_if:stripe_enabled,1',
                 'paypal_enabled' => 'boolean',
                 'paypal_client_id' => 'required_if:paypal_enabled,1',
-                'paypal_secret' => 'required_if:paypal_enabled,1',
+                'paypal_secret' => $secretRule('paypal_enabled', 'paypal_secret'),
+                'paypal_webhook_id' => 'nullable|string',
                 'paypal_mode' => 'required_if:paypal_enabled,1',
                 'razorpay_enabled' => 'boolean',
                 'razorpay_key' => 'required_if:razorpay_enabled,1',
-                'razorpay_secret' => 'required_if:razorpay_enabled,1',
+                'razorpay_secret' => $secretRule('razorpay_enabled', 'razorpay_secret'),
+                'razorpay_webhook_secret' => 'nullable|string',
                 'razorpay_mode' => 'required_if:razorpay_enabled,1',
                 'paystack_enabled' => 'boolean',
                 'paystack_key' => 'required_if:paystack_enabled,1',
-                'paystack_secret' => 'required_if:paystack_enabled,1',
+                'paystack_secret' => $secretRule('paystack_enabled', 'paystack_secret'),
                 'paystack_mode' => 'required_if:paystack_enabled,1',
             ]
         );

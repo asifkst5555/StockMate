@@ -57,6 +57,7 @@ class TransferItem extends BaseModel implements JsonResourceful
     public const JSON_API_TYPE = 'transfer_items';
 
     protected $fillable = [
+        'transfer_id',
         'product_id',
         'product_price',
         'net_unit_price',
@@ -72,15 +73,15 @@ class TransferItem extends BaseModel implements JsonResourceful
 
     public static $rules = [
         'product_id' => 'required|exists:products,id',
-        'product_price' => 'nullable|numeric',
-        'tax_type' => 'nullable|numeric',
-        'tax_value' => 'nullable|numeric',
-        'tax_amount' => 'nullable|numeric',
-        'discount_type' => 'nullable|numeric',
-        'discount_value' => 'nullable|numeric',
-        'discount_amount' => 'nullable|numeric',
-        'quantity' => 'nullable|numeric',
-        'sub_total' => 'nullable|numeric',
+        'product_price' => 'nullable|numeric|min:0',
+        'tax_type' => 'required|integer|in:1,2',
+        'tax_value' => 'nullable|numeric|min:0|max:100',
+        'tax_amount' => 'nullable|numeric|min:0',
+        'discount_type' => 'required|integer|in:1,2',
+        'discount_value' => 'nullable|numeric|min:0',
+        'discount_amount' => 'nullable|numeric|min:0',
+        'quantity' => 'required|numeric|gt:0',
+        'sub_total' => 'nullable|numeric|min:0',
     ];
 
     public $casts = [
@@ -122,5 +123,10 @@ class TransferItem extends BaseModel implements JsonResourceful
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class, 'product_id', 'id');
+    }
+
+    public function transfer(): BelongsTo
+    {
+        return $this->belongsTo(Transfer::class, 'transfer_id', 'id');
     }
 }

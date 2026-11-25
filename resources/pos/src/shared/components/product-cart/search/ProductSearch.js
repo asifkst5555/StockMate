@@ -36,20 +36,22 @@ const ProductSearch = (props) => {
             const finalIdArrays = customProducts.map((id) => id.product_id);
             const finalId = finalIdArrays.filter((finalIdArray) => finalIdArray === newId[0]);
             if (finalId[0] !== undefined) {
-                if (updateProducts.find(exitId => exitId.product_id === finalId[0])) {
+                const targetId = finalId[0];
+                const isAlreadyAdded = updateProducts.some(item =>
+                    (item.product_id && item.product_id === targetId) ||
+                    (item.id && item.id === targetId) ||
+                    (item.code && (item.code === code || item.code === code?.code))
+                );
+                if (isAlreadyAdded) {
                     dispatch(addToast({
                         text: getFormattedMessage('globally.product-already-added.validate.message'),
                         type: toastType.ERROR
                     }));
                 } else {
-                    searchPurchaseProduct(newId[0])
-                    const pushArray = [...customProducts]
-                    if (updateProducts.filter(product => product.code === code || product.code === code.code).length > 0) {
-                        setUpdateProducts(updateProducts => updateProducts.map((item) => {
-                            return item
-                        }))
-                    } else {
-                        const newProduct = pushArray.find(element => element.product_id === finalId[0]);
+                    searchPurchaseProduct(newId[0]);
+                    const pushArray = [...customProducts];
+                    const newProduct = pushArray.find(element => element.product_id === targetId);
+                    if (newProduct) {
                         setUpdateProducts([...updateProducts, newProduct]);
                     }
                 }
@@ -74,8 +76,11 @@ const ProductSearch = (props) => {
     }
 
     const removeSearchClass = () => {
-        const html = document.getElementsByClassName(`custom-search`)[0].firstChild.firstChild.lastChild;
-        html.style.display = 'none'
+        const customSearchEl = document.getElementsByClassName(`custom-search`)[0];
+        const html = customSearchEl?.firstChild?.firstChild?.lastChild;
+        if (html && html.style) {
+            html.style.display = 'none';
+        }
     }
 
     return (

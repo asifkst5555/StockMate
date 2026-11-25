@@ -86,6 +86,7 @@ class AdminRepository extends BaseRepository
                     'user_id' => $user->id,
                     'payment_type' => Subscription::TYPE_MANUAL,
                     'status' => Subscription::ACTIVE,
+                    'admin_assigned' => true,
                 ]);
             } else {
                 $plan = Plan::where('assign_while_register', true)->first();
@@ -93,6 +94,8 @@ class AdminRepository extends BaseRepository
                     'plan_id' => $plan->id,
                     'user_id' => $user->id,
                     'payment_type' => Subscription::TYPE_FREE,
+                    'status' => Subscription::ACTIVE,
+                    'admin_assigned' => true,
                 ]);
             }
 
@@ -204,6 +207,7 @@ class AdminRepository extends BaseRepository
                         'user_id' => $user->id,
                         'payment_type' => Subscription::TYPE_MANUAL,
                         'status' => Subscription::ACTIVE,
+                        'admin_assigned' => true,
                     ]);
                 }
             }
@@ -402,18 +406,18 @@ class AdminRepository extends BaseRepository
             'show_logo_in_receipt' => '1',
             'show_product_code' => '1',
             'notes' => 'Thanks for order',
-            // use ??
+            // N-05: Never seed fake/dummy secret credentials for newly created tenants
             'show_warehouse' => '1',
-            'stripe_key' => 'pu_test_yBzA1qI1PcfRBAVn1vJG2VuS00HcyhQX9LASERTFDDS',
-            'stripe_secret' => 'pu_test_yBzA1qI1PcfRBAVn1vJG2VuS00HcyhQX9LASERTFDDS',
+            'stripe_key' => '',
+            'stripe_secret' => '',
             'sms_gateway' => '1',
-            'twillo_sid' => 'asd',
-            'twillo_token' => 'asd',
-            'twillo_from' => 'asd',
-            'smtp_host' => 'mailtrap.io',
-            'smtp_port' => '2525',
-            'smtp_username' => 'test',
-            'smtp_password' => 'test',
+            'twillo_sid' => '',
+            'twillo_token' => '',
+            'twillo_from' => '',
+            'smtp_host' => '',
+            'smtp_port' => '',
+            'smtp_username' => '',
+            'smtp_password' => '',
             'smtp_Encryption' => 'tls',
         ];
         foreach ($settings as $key => $value) {

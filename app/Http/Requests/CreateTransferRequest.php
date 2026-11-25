@@ -3,9 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Models\Transfer;
+use App\Rules\TenantExists;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
 
 class CreateTransferRequest extends FormRequest
 {
@@ -22,23 +21,39 @@ class CreateTransferRequest extends FormRequest
      */
     public function rules(): array
     {
-        $tenantId = Auth::user()?->tenant_id;
         $rules = Transfer::$rules;
 
         $rules['from_warehouse_id'] = [
             'required',
-            Rule::exists('warehouses', 'id')->where(function ($query) use ($tenantId) {
-                $query->where('tenant_id', $tenantId);
-            }),
+            'integer',
+            new TenantExists('warehouses'),
         ];
 
         $rules['to_warehouse_id'] = [
             'required',
+            'integer',
             'different:from_warehouse_id',
-            Rule::exists('warehouses', 'id')->where(function ($query) use ($tenantId) {
-                $query->where('tenant_id', $tenantId);
-            }),
+            new TenantExists('warehouses'),
         ];
+
+        $rules['order_tax'] = 'nullable|numeric|min:0|max:100';
+        $rules['tax_rate'] = 'nullable|numeric|min:0|max:100';
+        $rules['discount'] = 'nullable|numeric|min:0';
+        $rules['shipping'] = 'nullable|numeric|min:0';
+
+        $rules['transfer_items'] = 'required|array|min:1';
+        $rules['transfer_items.*.product_id'] = [
+            'required',
+            'integer',
+            'distinct',
+            new TenantExists('products'),
+        ];
+        $rules['transfer_items.*.product_price'] = 'nullable|numeric|min:0';
+        $rules['transfer_items.*.tax_type'] = 'required|integer|in:1,2';
+        $rules['transfer_items.*.tax_value'] = 'nullable|numeric|min:0|max:100';
+        $rules['transfer_items.*.discount_type'] = 'required|integer|in:1,2';
+        $rules['transfer_items.*.discount_value'] = 'nullable|numeric|min:0';
+        $rules['transfer_items.*.quantity'] = 'required|numeric|gt:0';
 
         return $rules;
     }

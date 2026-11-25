@@ -23,6 +23,9 @@ class CreateExpenseRequest extends FormRequest
      */
     public function rules(): array
     {
-        return Expense::$rules;
+        return \App\Rules\TenantExists::scopeRules(
+            Expense::$rules,
+            ['warehouse_id' => 'warehouses', 'expense_category_id' => 'expense_categories']
+        );
     }
 }

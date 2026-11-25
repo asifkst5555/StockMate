@@ -125,9 +125,8 @@ class CustomerAPIController extends AppBaseController
         
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('topCustomers', 'companyLogo'));
-        
-        Storage::disk(config('app.media_disc'))->put('pdf/best-customers.pdf', $pdfContent);
-        $data['best_customers_pdf_url'] = Storage::url('pdf/best-customers.pdf');
+
+        $data['best_customers_pdf_url'] = \App\Services\ProtectedExportService::storePdf('best-customers', $pdfContent);
 
         return $this->sendResponse($data, 'pdf retrieved Successfully');
     }
@@ -165,9 +164,8 @@ class CustomerAPIController extends AppBaseController
         
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('customer', 'companyLogo', 'salesData'));
-        
-        Storage::disk(config('app.media_disc'))->put('pdf/customers-report-' . $customer->id . '.pdf', $pdfContent);
-        $data['customers_report_pdf_url'] = Storage::url('pdf/customers-report-' . $customer->id . '.pdf');
+
+        $data['customers_report_pdf_url'] = \App\Services\ProtectedExportService::storePdf('customers-report-' . $customer->id, $pdfContent);
 
         return $this->sendResponse($data, 'pdf retrieved Successfully');
     }
@@ -179,21 +177,16 @@ class CustomerAPIController extends AppBaseController
 
         $data = [];
 
-        if (Storage::exists('pdf/customer-sales-' . $customer->id . '.pdf')) {
-            Storage::delete('pdf/customer-sales-' . $customer->id . '.pdf');
-        }
-
         $companyLogo = getStoreLogo();
 
         $companyLogo = (string) Image::make($companyLogo)->encode('data-url');
 
         $pdfViewPath = getLoginUserLanguage() == 'ar' ? 'pdf.ar.customer-sales-pdf' : 'pdf.customer-sales-pdf';
-        
+
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('customer', 'companyLogo'));
-        
-        Storage::disk(config('app.media_disc'))->put('pdf/customer-sales-' . $customer->id . '.pdf', $pdfContent);
-        $data['customers_sales_pdf_url'] = Storage::url('pdf/customer-sales-' . $customer->id . '.pdf');
+
+        $data['customers_sales_pdf_url'] = \App\Services\ProtectedExportService::storePdf('customer-sales-' . $customer->id, $pdfContent);
 
         return $this->sendResponse($data, 'pdf retrieved Successfully');
     }
@@ -205,21 +198,16 @@ class CustomerAPIController extends AppBaseController
 
         $data = [];
 
-        if (Storage::exists('pdf/customer-quotations-' . $customer->id . '.pdf')) {
-            Storage::delete('pdf/customer-quotations-' . $customer->id . '.pdf');
-        }
-
         $companyLogo = getStoreLogo();
 
         $companyLogo = (string) Image::make($companyLogo)->encode('data-url');
 
         $pdfViewPath = getLoginUserLanguage() == 'ar' ? 'pdf.ar.customer-quotations-pdf' : 'pdf.customer-quotations-pdf';
-        
+
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('customer', 'companyLogo'));
-        
-        Storage::disk(config('app.media_disc'))->put('pdf/customer-quotations-' . $customer->id . '.pdf', $pdfContent);
-        $data['customers_quotations_pdf_url'] = Storage::url('pdf/customer-quotations-' . $customer->id . '.pdf');
+
+        $data['customers_quotations_pdf_url'] = \App\Services\ProtectedExportService::storePdf('customer-quotations-' . $customer->id, $pdfContent);
 
         return $this->sendResponse($data, 'pdf retrieved Successfully');
     }
@@ -231,21 +219,16 @@ class CustomerAPIController extends AppBaseController
 
         $data = [];
 
-        if (Storage::exists('pdf/customer-returns-' . $customer->id . '.pdf')) {
-            Storage::delete('pdf/customer-returns-' . $customer->id . '.pdf');
-        }
-
         $companyLogo = getStoreLogo();
 
         $companyLogo = (string) Image::make($companyLogo)->encode('data-url');
 
         $pdfViewPath = getLoginUserLanguage() == 'ar' ? 'pdf.ar.customer-returns-pdf' : 'pdf.customer-returns-pdf';
-        
+
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('customer', 'companyLogo'));
-        
-        Storage::disk(config('app.media_disc'))->put('pdf/customer-returns-' . $customer->id . '.pdf', $pdfContent);
-        $data['customers_returns_pdf_url'] = Storage::url('pdf/customer-returns-' . $customer->id . '.pdf');
+
+        $data['customers_returns_pdf_url'] = \App\Services\ProtectedExportService::storePdf('customer-returns-' . $customer->id, $pdfContent);
 
         return $this->sendResponse($data, 'pdf retrieved Successfully');
     }
@@ -253,40 +236,35 @@ class CustomerAPIController extends AppBaseController
     public function customerPaymentsPdfDownload($id): JsonResponse
     {
         ini_set('memory_limit', '-1');
-        $saleIds = [];
-
-        $sales = Sale::whereCustomerId($id)->get();
-
-        foreach ($sales as $sale) {
-            $saleIds[] = $sale->id;
-        }
+        // Enforce tenant-scoped customer ownership before exporting payments
+        $customer = Customer::findOrFail($id);
+        $saleIds = Sale::whereCustomerId($customer->id)->pluck('id')->all();
 
         $payments = SalesPayment::whereIn('sale_id', $saleIds)->with('sale')->get();
 
         $data = [];
-
-        if (Storage::exists('pdf/customer-payments-' . $id . '.pdf')) {
-            Storage::delete('pdf/customer-payments-' . $id . '.pdf');
-        }
 
         $companyLogo = getStoreLogo();
 
         $companyLogo = (string) Image::make($companyLogo)->encode('data-url');
 
         $pdfViewPath = getLoginUserLanguage() == 'ar' ? 'pdf.ar.customer-payments-pdf' : 'pdf.customer-payments-pdf';
-        
+
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('payments', 'companyLogo'));
-        
-        Storage::disk(config('app.media_disc'))->put('pdf/customer-payments-' . $id . '.pdf', $pdfContent);
-        $data['customers_payments_pdf_url'] = Storage::url('pdf/customer-payments-' . $id . '.pdf');
+
+        $data['customers_payments_pdf_url'] = \App\Services\ProtectedExportService::storePdf('customer-payments-' . $customer->id, $pdfContent);
 
         return $this->sendResponse($data, 'pdf retrieved Successfully');
     }
 
     public function importCustomers(Request $request)
     {
-        Excel::import(new CustomerImport(), request()->file('file'));
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
+        ]);
+
+        Excel::import(new CustomerImport(), $request->file('file'));
 
         return $this->sendSuccess(__('messages.success.customers_imported'));
     }

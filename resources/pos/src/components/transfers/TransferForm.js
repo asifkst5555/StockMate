@@ -72,17 +72,17 @@ const TransferForm = ( props ) => {
     useEffect(() => {
         if (singleTransfer && !transferValueUpdated) {
             setTransferValue({
-                date: moment(singleTransfer.date).toDate(),
+                date: singleTransfer.date ? moment(singleTransfer.date).toDate() : new Date(),
                 from_warehouse_id: singleTransfer.from_warehouse_id,
                 to_warehouse_id: singleTransfer.to_warehouse_id,
                 warehouse_id: undefined,
                 supplier_id: singleTransfer.supplier_id,
-                tax_rate: singleTransfer.tax_rate.toFixed(2),
-                tax_amount: singleTransfer.tax_amount.toFixed(2),
-                discount: singleTransfer.discount.toFixed(2),
-                shipping: singleTransfer.shipping.toFixed(2),
+                tax_rate: singleTransfer.tax_rate !== undefined && singleTransfer.tax_rate !== null ? Number(singleTransfer.tax_rate).toFixed(2) : '0.00',
+                tax_amount: singleTransfer.tax_amount !== undefined && singleTransfer.tax_amount !== null ? Number(singleTransfer.tax_amount).toFixed(2) : '0.00',
+                discount: singleTransfer.discount !== undefined && singleTransfer.discount !== null ? Number(singleTransfer.discount).toFixed(2) : '0.00',
+                shipping: singleTransfer.shipping !== undefined && singleTransfer.shipping !== null ? Number(singleTransfer.shipping).toFixed(2) : '0.00',
                 grand_total: singleTransfer.grand_total,
-                notes: singleTransfer.notes,
+                notes: singleTransfer.notes || '',
                 status_id: singleTransfer.status_id || {
                     label: getFormattedMessage("status.filter.complated.label"),
                     value: 1
@@ -115,27 +115,41 @@ const TransferForm = ( props ) => {
     const handleValidation = () => {
         let errorss = {};
         let isValid = false;
-        const qtyCart = updateProducts.filter( ( a ) => a.quantity === 0 );
-        if ( !transferValue.date ) {
-            error[ 'date' ] = getFormattedMessage( 'globally.date.validate.label' );
+        const invalidQty = updateProducts.filter( ( a ) => !a.quantity || Number(a.quantity) <= 0 || isNaN(Number(a.quantity)) );
+        const productIds = updateProducts.map(p => Number(p.product_id || p.id));
+        const hasDuplicates = new Set(productIds).size !== productIds.length;
+
+        if ( !transferValue.date || !moment(transferValue.date).isValid() ) {
+            errorss[ 'date' ] = getFormattedMessage( 'globally.date.validate.label' );
         } else if ( !transferValue.from_warehouse_id ) {
             errorss[ 'from_warehouse_id' ] = getFormattedMessage( 'product.input.warehouse.validate.label' )
         } else if ( !transferValue.to_warehouse_id ) {
             errorss[ 'to_warehouse_id' ] = getFormattedMessage( 'product.input.warehouse.validate.label' )
-        } else if ( transferValue.from_warehouse_id.value === transferValue.to_warehouse_id.value ) {
+        } else if ( (transferValue.from_warehouse_id.value || transferValue.from_warehouse_id) === (transferValue.to_warehouse_id.value || transferValue.to_warehouse_id) ) {
             errorss[ 'to_warehouse_id' ] = getFormattedMessage( "transfer.select.warehouse.validate.message" )
-        } else if ( qtyCart.length > 0 ) {
-            dispatch( addToast( {
-                text: getFormattedMessage( 'globally.product-quantity.validate.message' ),
-                type: toastType.ERROR
-            } ) )
         } else if ( updateProducts.length < 1 ) {
             dispatch( addToast( {
                 text: getFormattedMessage( 'purchase.product-list.validate.message' ),
                 type: toastType.ERROR
             } ) )
+        } else if ( invalidQty.length > 0 ) {
+            dispatch( addToast( {
+                text: getFormattedMessage( 'globally.product-quantity.validate.message' ),
+                type: toastType.ERROR
+            } ) )
+        } else if ( hasDuplicates ) {
+            dispatch( addToast( {
+                text: getFormattedMessage( 'globally.product-already-added.validate.message' ),
+                type: toastType.ERROR
+            } ) )
         } else if ( !transferValue.status_id ) {
             errorss[ 'status_id' ] = getFormattedMessage( 'globally.status.validate.label' )
+        } else if ( Number(transferValue.discount) < 0 ) {
+            errorss[ 'discount' ] = getFormattedMessage( 'globally.discount-cost-length.validate.label' );
+        } else if ( Number(transferValue.shipping) < 0 ) {
+            errorss[ 'shipping' ] = 'Shipping amount must be non-negative';
+        } else if ( Number(transferValue.tax_rate) < 0 || Number(transferValue.tax_rate) > 100 ) {
+            errorss[ 'tax_rate' ] = getFormattedMessage( 'globally.tax-length.validate.label' );
         } else {
             isValid = true;
         }
@@ -212,19 +226,32 @@ const TransferForm = ( props ) => {
 
     const prepareData = ( prepareData ) => {
         const formValue = {
-            from_warehouse_id: prepareData.from_warehouse_id.value ? prepareData.from_warehouse_id.value : prepareData.from_warehouse_id,
-            to_warehouse_id: prepareData.to_warehouse_id.value ? prepareData.to_warehouse_id.value : prepareData.to_warehouse_id,
-            date: moment( prepareData.date ).locale('en').toDate(),
-            transfer_items: updateProducts,
-            note: prepareData.notes,
-            discount: prepareData.discount,
-            tax_rate: prepareData.tax_rate,
+            from_warehouse_id: prepareData.from_warehouse_id?.value ? prepareData.from_warehouse_id.value : prepareData.from_warehouse_id,
+            to_warehouse_id: prepareData.to_warehouse_id?.value ? prepareData.to_warehouse_id.value : prepareData.to_warehouse_id,
+            date: moment( prepareData.date ).locale('en').format('YYYY-MM-DD'),
+            transfer_items: updateProducts.map( ( item ) => ( {
+                product_id: item.product_id,
+                quantity: Number( item.quantity ),
+                product_cost: Number( item.product_cost ?? item.net_unit_cost ?? item.fix_net_unit ?? 0 ),
+                tax_type: item.tax_type ? item.tax_type.toString() : '1',
+                tax_value: Number( item.tax_value ) || 0,
+                tax_amount: Number( item.tax_amount ) || 0,
+                discount_type: item.discount_type ? item.discount_type.toString() : '1',
+                discount_value: Number( item.discount_value ) || 0,
+                discount_amount: Number( item.discount_amount ) || 0,
+                purchase_unit: item.purchase_unit?.value ? item.purchase_unit.value : ( item.purchase_unit || 0 ),
+                sub_total: Number( item.sub_total ) || 0,
+                transfer_item_id: item.transfer_item_id || '',
+            } ) ),
+            note: prepareData.notes || '',
+            discount: prepareData.discount ? prepareData.discount : '0.00',
+            tax_rate: prepareData.tax_rate ? prepareData.tax_rate : '0.00',
             tax_amount: calculateCartTotalTaxAmount( updateProducts, transferValue ),
-            shipping: prepareData.shipping,
+            shipping: prepareData.shipping ? prepareData.shipping : '0.00',
             grand_total: calculateCartTotalAmount( updateProducts, transferValue ),
             received_amount: 0,
             paid_amount: 0,
-            status: prepareData.status_id.value ? prepareData.status_id.value : prepareData.status_id,
+            status: prepareData.status_id?.value ? prepareData.status_id.value : ( prepareData.status_id || 1 ),
         }
         return formValue
     };
@@ -397,6 +424,21 @@ const TransferForm = ( props ) => {
                             title={getFormattedMessage( 'globally.detail.status' )}
                             defaultValue={transferValue.status_id} errors={errors[ 'status_id' ]}
                             placeholder={placeholderText( 'purchase.select.status.placeholder.label' )} />
+                        {Number(transferValue.status_id?.value || transferValue.status_id) === 3 && (
+                            <small className='text-warning d-block mt-1'>
+                                Pending: Stock is not moved in either warehouse.
+                            </small>
+                        )}
+                        {Number(transferValue.status_id?.value || transferValue.status_id) === 2 && (
+                            <small className='text-primary d-block mt-1'>
+                                Sent: Transferred quantity is deducted from source warehouse.
+                            </small>
+                        )}
+                        {Number(transferValue.status_id?.value || transferValue.status_id) === 1 && (
+                            <small className='text-success d-block mt-1'>
+                                Completed: Transferred quantity is credited to destination warehouse.
+                            </small>
+                        )}
                     </div>
                     <div className='col-md-12 mb-5'>
                         <label className='form-label'>

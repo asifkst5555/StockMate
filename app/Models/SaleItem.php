@@ -76,7 +76,7 @@ class SaleItem extends BaseModel implements JsonResourceful
 
     public static $rules = [
         'product_id' => 'required|exists:products,id',
-        'product_price' => 'nullable|numeric',
+        'product_price' => 'nullable|numeric|min:0',
         'tax_type' => 'nullable|numeric',
         'tax_value' => 'nullable|numeric',
         'tax_amount' => 'nullable|numeric',

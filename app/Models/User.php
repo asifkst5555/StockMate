@@ -103,7 +103,7 @@ class User extends Authenticatable implements HasMedia, JsonResourceful, CanRese
         'phone' => 'required|numeric|unique:users',
         'password' => 'required|min:6',
         'confirm_password' => 'required|min:6|same:password',
-        'image' => 'image|mimes:jpg,jpeg,png,svg',
+        'image' => 'nullable|file|image|mimes:jpg,jpeg,png,webp|mimetypes:image/jpeg,image/png,image/webp|max:2048',
     ];
 
     public function getImageUrlAttribute(): string

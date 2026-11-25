@@ -7,6 +7,7 @@ use App\Http\Requests\CreatePurchaseReturnRequest;
 use App\Http\Requests\UpdatePurchaseReturnRequest;
 use App\Http\Resources\PurchaseReturnCollection;
 use App\Http\Resources\PurchaseReturnResource;
+use App\Models\Purchase;
 use App\Models\PurchaseReturn;
 use App\Models\Setting;
 use App\Models\Supplier;
@@ -120,21 +121,66 @@ class PurchaseReturnAPIController extends AppBaseController
     {
         try {
             DB::beginTransaction();
-            $purchaseReturn = $this->purchaseReturnRepository->where('id', $id)->with('purchaseReturnItems')->first();
-            foreach ($purchaseReturn->purchaseReturnItems as $purchaseReturnItem) {
-                manageStock(
-                    $purchaseReturn->warehouse_id,
-                    $purchaseReturnItem['product_id'],
-                    $purchaseReturnItem['quantity']
-                );
+            // S1 lock order: Eligible Purchases (ordered by ID) -> PurchaseReturn -> ManageStock
+            $meta = PurchaseReturn::whereKey($id)->first(['id', 'purchase_id', 'supplier_id', 'warehouse_id']);
+            if ($meta) {
+                $lockPurchaseIds = Purchase::where('supplier_id', $meta->supplier_id)
+                    ->where('warehouse_id', $meta->warehouse_id)
+                    ->where('status', Purchase::RECEIVED)
+                    ->pluck('id')
+                    ->all();
+                if ($meta->purchase_id) {
+                    $lockPurchaseIds[] = (int) $meta->purchase_id;
+                }
+                $lockPurchaseIds = array_values(array_unique(array_map('intval', $lockPurchaseIds)));
+                sort($lockPurchaseIds);
+                if (! empty($lockPurchaseIds)) {
+                    Purchase::whereIn('id', $lockPurchaseIds)->orderBy('id')->lockForUpdate()->get();
+                }
             }
-            if ($purchaseReturn->purchase) {
-                $purchaseReturn->purchase->update(['is_return' => 0]);
+
+            $purchaseReturn = PurchaseReturn::with('purchaseReturnItems')->where('id', $id)->lockForUpdate()->firstOrFail();
+
+            if ((int) $purchaseReturn->status === PurchaseReturn::COMPLETED) {
+                /** @var \App\Services\StockMovementService $stockService */
+                $stockService = app(\App\Services\StockMovementService::class);
+                $pairs = [];
+                foreach ($purchaseReturn->purchaseReturnItems as $item) {
+                    $pairs[] = ['warehouse_id' => (int) $purchaseReturn->warehouse_id, 'product_id' => (int) $item->product_id];
+                }
+                $stockService->lockStockRows($pairs);
+
+                foreach ($purchaseReturn->purchaseReturnItems as $purchaseReturnItem) {
+                    $stockService->reverse(
+                        (int) $purchaseReturn->warehouse_id,
+                        (int) $purchaseReturnItem->product_id,
+                        (float) $purchaseReturnItem->quantity,
+                        'purchase_return_delete_reversal',
+                        PurchaseReturn::class,
+                        (int) $purchaseReturn->id,
+                        isset($purchaseReturnItem->product_cost) ? (float) $purchaseReturnItem->product_cost : null,
+                        'Purchase return deletion reversal (' . ($purchaseReturn->reference_code ?? ('#' . $purchaseReturn->id)) . ')'
+                    );
+                }
             }
+
+            $purchaseId = $purchaseReturn->purchase_id;
             $this->purchaseReturnRepository->delete($purchaseReturn->id);
+
+            if ($purchaseId) {
+                $purchase = Purchase::whereKey($purchaseId)->lockForUpdate()->first();
+                if ($purchase) {
+                    $hasOtherReturns = PurchaseReturn::where('purchase_id', $purchase->id)->exists();
+                    $purchase->update(['is_return' => $hasOtherReturns ? 1 : 0]);
+                }
+            }
+
             DB::commit();
 
             return $this->sendSuccess('Purchase Return Deleted successfully');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
@@ -181,11 +227,7 @@ class PurchaseReturnAPIController extends AppBaseController
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('purchaseReturn', 'companyLogo'));
 
-        Storage::disk(config('app.media_disc'))->put(
-            'pdf/purchase_return-' . $purchaseReturn->reference_code . '.pdf',
-            $pdfContent
-        );
-        $data['purchase_return_pdf_url'] = Storage::url('pdf/purchase_return-' . $purchaseReturn->reference_code . '.pdf');
+        $data['purchase_return_pdf_url'] = \App\Services\ProtectedExportService::storePdf('purchase_return-' . $purchaseReturn->reference_code, $pdfContent);
 
         return $this->sendResponse($data, 'purchase return pdf retrieved Successfully');
     }

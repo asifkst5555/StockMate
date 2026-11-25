@@ -252,13 +252,24 @@ export const handleRazorPayPayment = (data, Razorpay) => async (dispatch) => {
 };
 
 async function displayRazorpay(sessionData, Razorpay, dispatch) {
-    const { razorpayOrder, amount, name, email, contact, plan_id } =
-        sessionData;
+    const { key, razorpayOrder, amount, currency, name, email, contact, plan_id } =
+        sessionData || {};
+
+    const publishableKey = key || process.env.MIX_RAZOR_KEY;
+    if (!publishableKey || !razorpayOrder || !amount || !currency) {
+        dispatch(
+            addToast({
+                text: "Unable to initialize Razorpay checkout session.",
+                type: toastType.ERROR,
+            })
+        );
+        return;
+    }
 
     const options = {
-        key: process.env.MIX_RAZOR_KEY,
+        key: publishableKey,
         amount: amount,
-        currency: "INR",
+        currency: currency,
         name: name,
         description: `Plan Purchase: ${plan_id}`,
         order_id: razorpayOrder,
@@ -266,9 +277,6 @@ async function displayRazorpay(sessionData, Razorpay, dispatch) {
             name: name,
             email: email,
             contact: contact,
-        },
-        notes: {
-            address: "Plan Purchase",
         },
         theme: {
             color: "#3399cc",
@@ -283,7 +291,7 @@ async function displayRazorpay(sessionData, Razorpay, dispatch) {
                         type: toastType.ERROR,
                     })
                 );
-                window.location.href = "/razorpay/failed"
+                window.location.href = `/razorpay/failed?order_id=${encodeURIComponent(razorpayOrder)}`;
             },
         },
     };

@@ -50,7 +50,7 @@ class Unit extends BaseModel
         return [
             'name' => 'required|unique:units,name,NULL,id,tenant_id,' . Auth::user()->tenant_id,
             'short_name' => 'required',
-            'base_unit' => 'required',
+            'base_unit' => ['required', 'integer', new \App\Rules\TenantExists('base_units')],
         ];
     }
 

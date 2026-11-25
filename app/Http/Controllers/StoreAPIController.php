@@ -104,6 +104,10 @@ class StoreAPIController extends AppBaseController
             return $error;
         }
 
+        if (! $store->status) {
+            return $this->sendError('This store is currently disabled.', 403);
+        }
+
         Session::put('active_store', $store->id);
 
         return new StoreResource($store);
@@ -149,8 +153,18 @@ class StoreAPIController extends AppBaseController
             return $error;
         }
 
+        // P0-D (SEC-06): Prevent switching into disabled stores or stores owned by a suspended Store Admin
+        if (! $store->status) {
+            return $this->sendError('Cannot switch to a disabled store.', 403);
+        }
+
+        $owner = User::withoutGlobalScopes()->find($store->user_id);
+        if ($owner && ! $owner->status) {
+            return $this->sendError('Cannot switch to a store belonging to a suspended account.', 403);
+        }
+
         try {
-            User::find(auth()->id())->update(['tenant_id' => $store->tenant_id]);
+            User::withoutGlobalScopes()->whereKey(auth()->id())->update(['tenant_id' => $store->tenant_id]);
 
             return $this->sendSuccess(__('messages.success.active_store_changed'));
         } catch (Exception $exception) {

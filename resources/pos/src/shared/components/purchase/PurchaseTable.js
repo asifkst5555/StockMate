@@ -30,7 +30,8 @@ const PurchaseTable = (props) => {
         productUnits,
         updatePurchaseUnit,
         allConfigData,
-        warehouseName
+        warehouseName,
+        isPurchaseReturn = false
     } = props;
     const [updateData, setUpdateData] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
@@ -41,6 +42,14 @@ const PurchaseTable = (props) => {
         singleProduct.newItem !== "" &&
             productUnitDropdown(singleProduct.product_unit);
     }, [updateData, singleProduct.purchase_unit]);
+
+    const withUpdatedQuantity = (item, newQuantity) => {
+        const updated = { ...item, quantity: newQuantity };
+        return {
+            ...updated,
+            sub_total: Number(subTotalCount(updated)),
+        };
+    };
 
     const onDeleteCartItem = (id) => {
         const newProduct = updateProducts.filter((item) => item.id !== id);
@@ -62,24 +71,30 @@ const PurchaseTable = (props) => {
 
     const handleIncrement = () => {
         setUpdateProducts((updateProducts) =>
-            updateProducts.map((item) =>
-                item.id === singleProduct.id
-                    ? { ...item, quantity: item.quantity++ + 1 }
-                    : item
-            )
+            updateProducts.map((item) => {
+                if (item.id !== singleProduct.id) {
+                    return item;
+                }
+                const newQuantity = Number(
+                    ((Number(item.quantity) || 0) + 1).toFixed(2)
+                );
+                return withUpdatedQuantity(item, newQuantity);
+            })
         );
     };
 
     const handleDecrement = () => {
-        if (singleProduct.quantity - 1 > 0.0) {
+        const currentQty = Number(singleProduct.quantity) || 0;
+        const minQuantity = isPurchaseReturn ? 0 : 1;
+        if (currentQty > minQuantity) {
+            const newQuantity = Math.max(
+                minQuantity,
+                Number((currentQty - 1).toFixed(2))
+            );
             setUpdateProducts((updateProducts) =>
                 updateProducts.map((item) =>
                     item.id === singleProduct.id
-                        ? {
-                              ...item,
-                              quantity:
-                                  item.quantity > 0.0 && item.quantity-- - 1,
-                          }
+                        ? withUpdatedQuantity(item, newQuantity)
                         : item
                 )
             );
@@ -98,28 +113,24 @@ const PurchaseTable = (props) => {
                 return;
             }
         }
+        const parsedQty = Math.max(0, Number(value) || 0);
         setUpdateProducts((updateProducts) =>
             updateProducts.map((item) =>
                 item.id === singleProduct.id
-                    ? { ...item, quantity: Number(value) }
+                    ? withUpdatedQuantity(item, parsedQty)
                     : item
             )
         );
     };
 
-    useEffect(() => {
-        if (!singleProduct?.in_warehouse_stock) return;
-    
-        const foundItem = singleProduct.in_warehouse_stock.find(
-            (item) => item.name === warehouseName
-        );
-    
-        if (foundItem) {
-            singleProduct.stock = foundItem.total_quantity;
-        } else {
-            singleProduct.stock = 0;
-        }
-    }, [singleProduct?.in_warehouse_stock, warehouseName]);
+    const matchedWarehouseStock = singleProduct?.in_warehouse_stock?.find(
+        (item) => item.name === warehouseName
+    );
+    const resolvedStock = singleProduct?.in_warehouse_stock
+        ? matchedWarehouseStock
+            ? matchedWarehouseStock.total_quantity
+            : 0
+        : singleProduct.stock;
 
     return (
         <>
@@ -149,21 +160,30 @@ const PurchaseTable = (props) => {
                 </td>
                 <td>
                     {singleProduct.isEdit ? (
-                        singleProduct.stocks.length >= 1 &&
-                        singleProduct.stocks.map((item) => {
-                            return (
-                                <span className="badge bg-light-warning">
-                                    <span>
-                                        {item.quantity}&nbsp;
-                                        {singleProduct.short_name}
+                        Array.isArray(singleProduct.stocks) &&
+                        singleProduct.stocks.length >= 1 ? (
+                            singleProduct.stocks.map((item, stockIndex) => {
+                                return (
+                                    <span
+                                        key={item.warehouse_id ?? stockIndex}
+                                        className="badge bg-light-warning"
+                                    >
+                                        <span>
+                                            {item.quantity}&nbsp;
+                                            {singleProduct.short_name}
+                                        </span>
                                     </span>
-                                </span>
-                            );
-                        })
-                    ) : singleProduct.stock > 0 ? (
+                                );
+                            })
+                        ) : (
+                            <span className="badge bg-light-warning">
+                                <span>0 &nbsp;{singleProduct.short_name}</span>
+                            </span>
+                        )
+                    ) : resolvedStock > 0 ? (
                         <span className="badge bg-light-warning">
                             <span>
-                                {singleProduct.stock}&nbsp;
+                                {resolvedStock}&nbsp;
                                 {singleProduct.short_name}
                             </span>
                         </span>
@@ -234,25 +254,27 @@ const PurchaseTable = (props) => {
                     </button>
                 </td>
             </tr>
-            <ProductModal
-                handleClose={handleClose}
-                setIsOpen={setIsOpen}
-                show={isOpen}
-                modalId={modalId}
-                isOpen={isOpen}
-                frontSetting={frontSetting}
-                product={singleProduct}
-                id={singleProduct.id}
-                productUnits={productUnits}
-                updatePurchaseUnit={updatePurchaseUnit}
-                updateProducts={updateProducts}
-                title={singleProduct.name}
-                onProductUpdateInCart={onProductUpdateInCart}
-                updateSubTotal={updateSubTotal}
-                updateCost={updateCost}
-                updateDiscount={updateDiscount}
-                updateTax={updateTax}
-            />
+            {isOpen && (
+                <ProductModal
+                    handleClose={handleClose}
+                    setIsOpen={setIsOpen}
+                    show={isOpen}
+                    modalId={modalId}
+                    isOpen={isOpen}
+                    frontSetting={frontSetting}
+                    product={singleProduct}
+                    id={singleProduct.id}
+                    productUnits={productUnits}
+                    updatePurchaseUnit={updatePurchaseUnit}
+                    updateProducts={updateProducts}
+                    title={singleProduct.name}
+                    onProductUpdateInCart={onProductUpdateInCart}
+                    updateSubTotal={updateSubTotal}
+                    updateCost={updateCost}
+                    updateDiscount={updateDiscount}
+                    updateTax={updateTax}
+                />
+            )}
         </>
     );
 };

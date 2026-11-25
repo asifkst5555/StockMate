@@ -11,6 +11,9 @@ use App\Models\ManageStock;
 use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\PurchaseItem;
+use App\Models\PurchaseReturn;
+use App\Models\PurchaseReturnItem;
 use App\Models\Setting;
 use App\Models\Supplier;
 use App\Models\Warehouse;
@@ -122,27 +125,137 @@ class PurchaseAPIController extends AppBaseController
     {
         try {
             DB::beginTransaction();
-            //manage stock
-            $purchase = $this->purchaseRepository->with('purchaseItems')->where('id', $id)->first();
-            foreach ($purchase->purchaseItems as $purchaseItem) {
-                $product = ManageStock::whereWarehouseId($purchase->warehouse_id)
-                    ->whereProductId($purchaseItem['product_id'])
-                    ->first();
-                if ($product) {
-                    if ($product->quantity >= $purchaseItem['quantity']) {
-                        $totalQuantity = $product->quantity - $purchaseItem['quantity'];
-                        $product->update([
-                            'quantity' => $totalQuantity,
-                        ]);
-                    } else {
-                        throw new UnprocessableEntityHttpException(__('messages.error.available_quantity'));
+
+            // S1 lock order: Eligible RECEIVED Purchases for supplier+warehouse (+ target ID) sorted ASC -> PurchaseReturns ASC -> ManageStock
+            $meta = Purchase::whereKey($id)->first(['id', 'supplier_id', 'warehouse_id', 'status']);
+            $lockedReceivedIds = [];
+            if ($meta) {
+                $lockIds = Purchase::where('supplier_id', $meta->supplier_id)
+                    ->where('warehouse_id', $meta->warehouse_id)
+                    ->where('status', Purchase::RECEIVED)
+                    ->pluck('id')
+                    ->all();
+                $lockIds[] = (int) $id;
+                $lockIds = array_values(array_unique(array_map('intval', $lockIds)));
+                sort($lockIds);
+                $lockedPurchases = Purchase::whereIn('id', $lockIds)->orderBy('id')->lockForUpdate()->get();
+                $lockedReceivedIds = $lockedPurchases
+                    ->filter(static fn (Purchase $p): bool => (int) $p->supplier_id === (int) $meta->supplier_id
+                        && (int) $p->warehouse_id === (int) $meta->warehouse_id
+                        && (int) $p->status === Purchase::RECEIVED)
+                    ->pluck('id')
+                    ->all();
+            }
+
+            $purchase = Purchase::with('purchaseItems')->where('id', $id)->lockForUpdate()->firstOrFail();
+
+            // C2-B3-03: Block parent Purchase deletion if any PurchaseReturn is linked to it
+            if (PurchaseReturn::where('purchase_id', $purchase->id)->lockForUpdate()->exists()) {
+                throw new UnprocessableEntityHttpException(
+                    'Cannot delete purchase: one or more purchase returns are linked to this purchase. Please delete the purchase returns first.'
+                );
+            }
+
+            // C2-B3-3A Microfix 1: Block deletion if a RECEIVED Purchase backs existing standalone (purchase_id = null) PurchaseReturn quota
+            if ((int) $purchase->status === Purchase::RECEIVED) {
+                $poolReturns = PurchaseReturn::where('supplier_id', $purchase->supplier_id)
+                    ->where('warehouse_id', $purchase->warehouse_id)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+                $hasUnlinkedReturns = $poolReturns->contains(static fn (PurchaseReturn $r): bool => $r->purchase_id === null);
+
+                if ($hasUnlinkedReturns && $purchase->purchaseItems->isNotEmpty()) {
+                    $remainingReceivedIds = array_values(array_filter(
+                        $lockedReceivedIds,
+                        static fn (int $pid): bool => $pid !== (int) $purchase->id
+                    ));
+                    $poolReturnIds = $poolReturns->pluck('id')->all();
+                    $affectedProductIds = $purchase->purchaseItems->pluck('product_id')->map(static fn ($pid): int => (int) $pid)->unique()->values()->all();
+
+                    foreach ($affectedProductIds as $productId) {
+                        $returnedQty = (float) PurchaseReturnItem::whereIn('purchase_return_id', $poolReturnIds)
+                            ->where('product_id', $productId)
+                            ->sum('quantity');
+                        if ($returnedQty <= 0.0) {
+                            continue;
+                        }
+
+                        $remainingQty = ! empty($remainingReceivedIds)
+                            ? (float) PurchaseItem::whereIn('purchase_id', $remainingReceivedIds)->where('product_id', $productId)->sum('quantity')
+                            : 0.0;
+
+                        if ($returnedQty > ($remainingQty + 1e-9)) {
+                            throw new UnprocessableEntityHttpException(
+                                'Cannot delete purchase: remaining received purchases for this supplier and warehouse cannot cover existing purchase returns.'
+                            );
+                        }
+
+                        $returnedSubTotal = (float) PurchaseReturnItem::whereIn('purchase_return_id', $poolReturnIds)
+                            ->where('product_id', $productId)
+                            ->sum('sub_total');
+                        $remainingSubTotal = ! empty($remainingReceivedIds)
+                            ? (float) PurchaseItem::whereIn('purchase_id', $remainingReceivedIds)->where('product_id', $productId)->sum('sub_total')
+                            : 0.0;
+
+                        if ($returnedSubTotal > ($remainingSubTotal + 0.02)) {
+                            throw new UnprocessableEntityHttpException(
+                                'Cannot delete purchase: remaining received purchase values for this supplier and warehouse cannot cover existing purchase return credits.'
+                            );
+                        }
+                    }
+
+                    $unlinkedReturnsTouchedAffectedProducts = PurchaseReturnItem::whereIn(
+                        'purchase_return_id',
+                        $poolReturns->whereNull('purchase_id')->pluck('id')->all()
+                    )->whereIn('product_id', $affectedProductIds)->exists();
+
+                    if ($unlinkedReturnsTouchedAffectedProducts) {
+                        $remainingPoolGrandTotal = ! empty($remainingReceivedIds)
+                            ? (float) Purchase::whereIn('id', $remainingReceivedIds)->sum('grand_total')
+                            : 0.0;
+                        $poolReturnedGrandTotal = (float) $poolReturns->sum('grand_total');
+                        if ($poolReturnedGrandTotal > ($remainingPoolGrandTotal + 0.02)) {
+                            throw new UnprocessableEntityHttpException(
+                                'Cannot delete purchase: total existing purchase returns would exceed remaining received purchase totals.'
+                            );
+                        }
                     }
                 }
             }
-            $this->purchaseRepository->delete($id);
+
+            // E5: Only reverse stock if the purchase was actually RECEIVED
+            if ((int) $purchase->status === Purchase::RECEIVED) {
+                /** @var \App\Services\StockMovementService $stockService */
+                $stockService = app(\App\Services\StockMovementService::class);
+                $pairs = [];
+                foreach ($purchase->purchaseItems as $purchaseItem) {
+                    $pairs[] = ['warehouse_id' => (int) $purchase->warehouse_id, 'product_id' => (int) $purchaseItem->product_id];
+                }
+                $stockService->lockStockRows($pairs);
+
+                foreach ($purchase->purchaseItems as $purchaseItem) {
+                    $stockService->reverse(
+                        (int) $purchase->warehouse_id,
+                        (int) $purchaseItem->product_id,
+                        -(float) $purchaseItem->quantity,
+                        'purchase_delete_reversal',
+                        Purchase::class,
+                        (int) $purchase->id,
+                        isset($purchaseItem->product_cost) ? (float) $purchaseItem->product_cost : null,
+                        'Purchase deletion reversal (' . ($purchase->reference_code ?? ('#' . $purchase->id)) . ')',
+                        __('messages.error.available_quantity')
+                    );
+                }
+            }
+
+            $this->purchaseRepository->delete($purchase->id);
             DB::commit();
 
             return $this->sendSuccess('Purchase Deleted successfully');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            DB::rollBack();
+            throw $e;
         } catch (Exception $e) {
             DB::rollBack();
             throw new UnprocessableEntityHttpException($e->getMessage());
@@ -172,9 +285,8 @@ class PurchaseAPIController extends AppBaseController
         
         // Use helper function for PDF generation with Arabic support
         $pdfContent = generatePDF($pdfViewPath, compact('purchase', 'companyLogo'));
-        
-        Storage::disk(config('app.media_disc'))->put('pdf/Purchase-' . $purchase->reference_code . '.pdf', $pdfContent);
-        $data['purchase_pdf_url'] = Storage::url('pdf/Purchase-' . $purchase->reference_code . '.pdf');
+
+        $data['purchase_pdf_url'] = \App\Services\ProtectedExportService::storePdf('Purchase-' . $purchase->reference_code, $pdfContent);
 
         return $this->sendResponse($data, 'pdf retrieved Successfully');
     }

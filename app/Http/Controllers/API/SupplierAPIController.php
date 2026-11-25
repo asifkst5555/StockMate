@@ -9,6 +9,7 @@ use App\Http\Resources\SupplierCollection;
 use App\Http\Resources\SupplierResource;
 use App\Imports\SupplierImport;
 use App\Models\Purchase;
+use App\Models\PurchaseReturn;
 use App\Models\Supplier;
 use App\Repositories\SupplierRepository;
 use Illuminate\Http\JsonResponse;
@@ -72,21 +73,30 @@ class SupplierAPIController extends AppBaseController
 
     public function destroy($id): JsonResponse
     {
-        $purchaseModel = [
+        $supplier = Supplier::whereKey($id)->firstOrFail();
+
+        $linkedModels = [
             Purchase::class,
+            PurchaseReturn::class,
         ];
-        $useSupplier = canDelete($purchaseModel, 'supplier_id', $id);
+        $useSupplier = canDelete($linkedModels, 'supplier_id', $supplier->id);
         if ($useSupplier) {
-            $this->sendError(__('messages.error.supplier_in_use'));
+            return $this->sendError(__('messages.error.supplier_in_use'));
         }
-        $this->supplierRepository->delete($id);
+        $this->supplierRepository->delete($supplier->id);
 
         return $this->sendSuccess('Supplier deleted successfully');
     }
 
     public function importSuppliers(Request $request): JsonResponse
     {
-        Excel::import(new SupplierImport(), request()->file('file'));
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
+        ]);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($request) {
+            Excel::import(new SupplierImport(), $request->file('file'));
+        });
 
         return $this->sendSuccess(__('messages.success.suppliers_imported'));
     }
@@ -104,18 +114,13 @@ class SupplierAPIController extends AppBaseController
 
         $data = [];
 
-        if (Storage::exists('pdf/suppliers-report-' . $supplier->id . '.pdf')) {
-            Storage::delete('pdf/suppliers-report-' . $supplier->id . '.pdf');
-        }
-
         $companyLogo = getStoreLogo();
 
         $companyLogo = (string) Image::make($companyLogo)->encode('data-url');
 
         $pdfViewPath = getLoginUserLanguage() == 'ar' ? 'pdf.ar.suppliers-report-pdf' : 'pdf.suppliers-report-pdf';
         $pdfContent = generatePDF($pdfViewPath, compact('supplier', 'companyLogo', 'purchasesData'));
-        Storage::disk(config('app.media_disc'))->put('pdf/suppliers-report-' . $supplier->id . '.pdf', $pdfContent);
-        $data['suppliers_report_pdf_url'] = Storage::url('pdf/suppliers-report-' . $supplier->id . '.pdf');
+        $data['suppliers_report_pdf_url'] = \App\Services\ProtectedExportService::storePdf('suppliers-report-' . $supplier->id, $pdfContent);
 
         return $this->sendResponse($data, 'pdf retrieved Successfully');
     }

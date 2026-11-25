@@ -57,75 +57,94 @@ class SubscriptionAPIController extends AppBaseController
     public function updateStatus(Request $request, Subscription $subscription)
     {
         $validated = $request->validate([
-            'status' => 'required',
+            'status' => 'required|integer|in:' . Subscription::ACTIVE . ',' . Subscription::REJECTED,
         ]);
 
-        if ($subscription->status == Subscription::PENDING) {
-            $storeUser = User::withoutGlobalScope('tenant')->find($subscription->user_id);
-            $userStores = Store::where('user_id', $subscription->user_id)->get();
+        if ($subscription->status != Subscription::PENDING) {
+            return $this->sendError('Status can\'t be updated', 422);
+        }
 
-            if ($subscription->data) {
-                $decodedData = json_decode($subscription->data);
-                $dataActiveStore = null;
-                $activeStoreTenantId = $decodedData->active_store ?? null;
-                $dataStores = $decodedData->stores ?? [];
-                if ($activeStoreTenantId) {
-                    $dataActiveStore = Store::where('tenant_id', $activeStoreTenantId)->first();
-                }
+        $targetStatus = (int) $validated['status'];
 
-                if ($dataStores) {
-                    Store::where('user_id', $subscription->user_id)
-                        ->whereNotIn('id', $dataStores)
-                        ->update(['status' => 0]);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($subscription, $targetStatus) {
+            $lockedSub = Subscription::whereKey($subscription->id)->lockForUpdate()->firstOrFail();
+            if ($lockedSub->status != Subscription::PENDING) {
+                throw new \Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException('Status can\'t be updated');
+            }
 
-                    if ($dataActiveStore) {
-                        $dataActiveStore->update(['status' => 1]);
-                        $storeUser->update(['tenant_id' => $dataActiveStore->tenant_id]);
+            if ($targetStatus === Subscription::ACTIVE) {
+                $storeUser = User::withoutGlobalScope('tenant')->find($lockedSub->user_id);
+                $userStores = Store::where('user_id', $lockedSub->user_id)->get();
+
+                if ($lockedSub->data) {
+                    $decodedData = json_decode($lockedSub->data);
+                    $dataActiveStore = null;
+                    $activeStoreTenantId = $decodedData->active_store ?? null;
+                    $dataStores = $decodedData->stores ?? [];
+                    if ($activeStoreTenantId) {
+                        $dataActiveStore = Store::where('tenant_id', $activeStoreTenantId)->first();
                     }
 
-                    $disabledStores = Store::where('user_id', $subscription->user_id)->where('status', 0)->get();
-                    foreach ($disabledStores as $store) {
-                        UserStore::where('store_id', $store->id)->delete();
-                        $disabledStoresUsers = User::where('tenant_id', $store->tenant_id)->get();
-                        foreach ($disabledStoresUsers as $disabledStoreUser) {
-                            $firstActiveStore = UserStore::where('user_id', $disabledStoreUser->id)->first();
-                            if ($firstActiveStore && $firstActiveStore->store->tenant_id) {
-                                $disabledStoreUser->update(['tenant_id' => $firstActiveStore->store->tenant_id]);
+                    if ($dataStores) {
+                        Store::where('user_id', $lockedSub->user_id)
+                            ->whereNotIn('id', $dataStores)
+                            ->update(['status' => 0]);
+
+                        if ($dataActiveStore && $storeUser) {
+                            $dataActiveStore->update(['status' => 1]);
+                            $storeUser->update(['tenant_id' => $dataActiveStore->tenant_id]);
+                        }
+
+                        $disabledStores = Store::where('user_id', $lockedSub->user_id)->where('status', 0)->get();
+                        foreach ($disabledStores as $store) {
+                            UserStore::where('store_id', $store->id)->delete();
+                            $disabledStoresUsers = User::withoutGlobalScope('tenant')->where('tenant_id', $store->tenant_id)->get();
+                            foreach ($disabledStoresUsers as $disabledStoreUser) {
+                                $firstActiveStore = UserStore::where('user_id', $disabledStoreUser->id)->first();
+                                if ($firstActiveStore && $firstActiveStore->store && $firstActiveStore->store->tenant_id) {
+                                    $disabledStoreUser->update(['tenant_id' => $firstActiveStore->store->tenant_id]);
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            $activeStores = $userStores->where('status', 1);
-            if ($activeStores->count() > $subscription->plan->no_of_stores) {
-                $storeIdsToDisable = $activeStores->sortBy('id')->pluck('id')->slice($subscription->plan->no_of_stores)->values()->toArray();
-                $disableStores = Store::whereIn('id', $storeIdsToDisable)->get();
-                foreach ($disableStores as $store) {
-                    if ($storeUser->tenant_id = $store->tenant_id) {
-                        $storeUser->update(['tenant_id' => $activeStores->first()->tenant_id]);
+                $activeStores = Store::where('user_id', $lockedSub->user_id)->where('status', 1)->get();
+                $planLimit = (int) ($lockedSub->plan->no_of_stores ?? 1);
+                $override = ($storeUser && $storeUser->store_limit_override !== null)
+                    ? (int) $storeUser->store_limit_override
+                    : null;
+                $effectiveLimit = $override !== null ? $override : $planLimit;
+
+                // SEC-A3: Respect unlimited (-1) plans & fix == comparison bug
+                if ($effectiveLimit !== \App\Services\StoreLimitService::UNLIMITED && $effectiveLimit >= 0 && $activeStores->count() > $effectiveLimit) {
+                    $storeIdsToDisable = $activeStores->sortBy('id')->pluck('id')->slice($effectiveLimit)->values()->toArray();
+                    $disableStores = Store::whereIn('id', $storeIdsToDisable)->get();
+                    $fallbackActive = $activeStores->sortBy('id')->first();
+                    foreach ($disableStores as $store) {
+                        if ($storeUser && $storeUser->tenant_id == $store->tenant_id && $fallbackActive) {
+                            $storeUser->update(['tenant_id' => $fallbackActive->tenant_id]);
+                        }
+                        $store->status = 0;
+                        $store->save();
                     }
-                    $store->status = 0;
-                    $store->save();
                 }
             }
 
-            $subscription->update([
-                'status' => (int) $validated['status'],
-                'is_paid' => (int) $validated['status'] == Subscription::ACTIVE ? 1 : 0,
+            $lockedSub->update([
+                'status' => $targetStatus,
+                'is_paid' => $targetStatus === Subscription::ACTIVE ? 1 : 0,
             ]);
 
-            if ($subscription->status == Subscription::ACTIVE) {
-                Subscription::where('user_id', $subscription->user_id)
-                    ->whereNot('id', $subscription->id)
+            if ($lockedSub->status == Subscription::ACTIVE) {
+                Subscription::where('user_id', $lockedSub->user_id)
+                    ->whereNot('id', $lockedSub->id)
                     ->where('status', Subscription::ACTIVE)
                     ->update(['status' => Subscription::INACTIVE]);
             }
+        });
 
-            return $this->sendSuccess(__('messages.success.status_updated'));
-        }
-
-        return $this->sendError('Status can\'t be updated');
+        return $this->sendSuccess(__('messages.success.status_updated'));
     }
 
     public function endDateUpdate(Request $request, Subscription $subscription)

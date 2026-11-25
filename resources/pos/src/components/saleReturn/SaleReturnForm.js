@@ -146,10 +146,24 @@ const SaleReturnForm = (props) => {
         let error = {};
         let isValid = false;
 
+        const hasInvalidQuantity = updateProducts.some(
+            (product) =>
+                !Number.isFinite(Number(product.quantity)) ||
+                Number(product.quantity) < 0 ||
+                (product.sold_quantity !== undefined &&
+                    product.sold_quantity !== null &&
+                    Number(product.quantity) > Number(product.sold_quantity))
+        );
         // Check for products with quantity > 0
         const hasValidQuantity = updateProducts.some(
-            (product) => product.quantity > 0
+            (product) => Number(product.quantity) > 0
         );
+        const selectedStatus = Number(
+            saleReturnValue.status?.value ?? saleReturnValue.status
+        );
+        const taxRate = Number(saleReturnValue.tax_rate || 0);
+        const discountVal = Number(saleReturnValue.discount || 0);
+        const shippingVal = Number(saleReturnValue.shipping || 0);
 
         if (!saleReturnValue.date) {
             error["date"] = getFormattedMessage("globally.date.validate.label");
@@ -161,15 +175,6 @@ const SaleReturnForm = (props) => {
             error["customer_id"] = getFormattedMessage(
                 "sale.select.customer.validate.label"
             );
-        } else if (!hasValidQuantity) {
-            dispatch(
-                addToast({
-                    text: getFormattedMessage(
-                        "globally.product-quantity.validate.message"
-                    ),
-                    type: toastType.ERROR,
-                })
-            );
         } else if (updateProducts.length < 1) {
             dispatch(
                 addToast({
@@ -179,7 +184,55 @@ const SaleReturnForm = (props) => {
                     type: toastType.ERROR,
                 })
             );
-        } else if (!saleReturnValue.status) {
+        } else if (hasInvalidQuantity || !hasValidQuantity) {
+            dispatch(
+                addToast({
+                    text: getFormattedMessage(
+                        "globally.product-quantity.validate.message"
+                    ),
+                    type: toastType.ERROR,
+                })
+            );
+        } else if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) {
+            error["tax_rate"] = getFormattedMessage(
+                "globally.tax-length.validate.label"
+            );
+            dispatch(
+                addToast({
+                    text: getFormattedMessage(
+                        "globally.tax-length.validate.label"
+                    ),
+                    type: toastType.ERROR,
+                })
+            );
+        } else if (!Number.isFinite(discountVal) || discountVal < 0) {
+            error["discount"] = getFormattedMessage(
+                "globally.discount-length.validate.label"
+            );
+            dispatch(
+                addToast({
+                    text: getFormattedMessage(
+                        "globally.discount-length.validate.label"
+                    ),
+                    type: toastType.ERROR,
+                })
+            );
+        } else if (!Number.isFinite(shippingVal) || shippingVal < 0) {
+            error["shipping"] = getFormattedMessage(
+                "globally.require-input.validate.label"
+            );
+            dispatch(
+                addToast({
+                    text: getFormattedMessage(
+                        "globally.require-input.validate.label"
+                    ),
+                    type: toastType.ERROR,
+                })
+            );
+        } else if (
+            !saleReturnValue.status ||
+            (selectedStatus !== 1 && selectedStatus !== 2)
+        ) {
             error["status"] = getFormattedMessage(
                 "globally.status.validate.label"
             );
@@ -245,29 +298,32 @@ const SaleReturnForm = (props) => {
     };
 
     const prepareFormData = (prepareData) => {
+        const activeReturnItems = updateProducts.filter(
+            (item) => Number(item.quantity) > 0
+        );
         const formValue = {
             date: moment(prepareData.date).locale('en').toDate(),
-            customer_id: prepareData.customer_id.value
+            customer_id: prepareData.customer_id?.value
                 ? prepareData.customer_id.value
                 : prepareData.customer_id,
-            warehouse_id: prepareData.warehouse_id.value
+            warehouse_id: prepareData.warehouse_id?.value
                 ? prepareData.warehouse_id.value
                 : prepareData.warehouse_id,
             discount: prepareData.discount,
             tax_rate: prepareData.tax_rate,
             tax_amount: calculateCartTotalTaxAmount(
-                updateProducts,
+                activeReturnItems,
                 saleReturnValue
             ),
-            sale_return_items: updateProducts,
+            sale_return_items: activeReturnItems,
             shipping: prepareData.shipping,
             grand_total: Number(
-                calculateCartTotalAmount(updateProducts, saleReturnValue)
+                calculateCartTotalAmount(activeReturnItems, saleReturnValue)
             ),
             received_amount: 0,
             payment_type: null,
             paid_amount: 0,
-            status: prepareData.status.value,
+            status: prepareData.status?.value ?? prepareData.status,
             note: prepareData.notes,
             sale_id: prepareData.sale_id,
             sale_reference: prepareData.sale_reference,

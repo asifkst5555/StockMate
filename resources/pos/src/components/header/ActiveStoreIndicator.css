@@ -150,16 +150,78 @@
 }
 
 .sm-active-store-btn:hover:not(:disabled),
-.sm-active-store-dropdown.show .sm-active-store-btn {
+.sm-active-store-btn:focus-visible:not(:disabled),
+.sm-active-store-btn:active:not(:disabled) {
+    border-color: #f47716 !important;
+    background-color: #f47716 !important;
+    box-shadow: 0 2px 8px rgba(244, 119, 22, 0.2);
+}
+
+.sm-active-store-btn:focus-visible:not(:disabled) {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(244, 119, 22, 0.28);
+}
+
+.sm-active-store-btn:hover:not(:disabled) .sm-active-store-name,
+.sm-active-store-btn:focus-visible:not(:disabled) .sm-active-store-name,
+.sm-active-store-btn:active:not(:disabled) .sm-active-store-name,
+.sm-active-store-btn:hover:not(:disabled) .sm-active-store-sub,
+.sm-active-store-btn:focus-visible:not(:disabled) .sm-active-store-sub,
+.sm-active-store-btn:active:not(:disabled) .sm-active-store-sub,
+.sm-active-store-btn:hover:not(:disabled) .sm-active-store-chevron,
+.sm-active-store-btn:focus-visible:not(:disabled) .sm-active-store-chevron,
+.sm-active-store-btn:active:not(:disabled) .sm-active-store-chevron {
+    color: #ffffff !important;
+}
+
+.sm-active-store-btn:hover:not(:disabled) .sm-active-store-icon,
+.sm-active-store-btn:focus-visible:not(:disabled) .sm-active-store-icon,
+.sm-active-store-btn:active:not(:disabled) .sm-active-store-icon {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    color: #ffffff !important;
+}
+
+.sm-active-store-dropdown.show .sm-active-store-btn:not(:hover):not(:focus-visible) {
     border-color: #f47716;
     background-color: #fff7ed;
     box-shadow: 0 2px 8px rgba(244, 119, 22, 0.12);
 }
 
-.sm-active-store-btn:focus-visible {
+/* Global Sidebar Store Selector Hover & Focus Contrast */
+.store-dropdown .dropdown-toggle {
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.store-dropdown .dropdown-toggle:hover:not(:disabled),
+.store-dropdown .dropdown-toggle:focus-visible:not(:disabled),
+.store-dropdown .dropdown-toggle:active:not(:disabled) {
+    background-color: #f47716 !important;
+    border-color: #f47716 !important;
+    color: #ffffff !important;
+}
+
+.store-dropdown .dropdown-toggle:focus-visible:not(:disabled) {
     outline: none;
-    border-color: #f47716;
-    box-shadow: 0 0 0 3px rgba(244, 119, 22, 0.16);
+    box-shadow: 0 0 0 3px rgba(244, 119, 22, 0.28);
+}
+
+.store-dropdown .dropdown-toggle:hover:not(:disabled) .store-name,
+.store-dropdown .dropdown-toggle:focus-visible:not(:disabled) .store-name,
+.store-dropdown .dropdown-toggle:active:not(:disabled) .store-name,
+.store-dropdown .dropdown-toggle:hover:not(:disabled) .text-muted,
+.store-dropdown .dropdown-toggle:focus-visible:not(:disabled) .text-muted,
+.store-dropdown .dropdown-toggle:active:not(:disabled) .text-muted,
+.store-dropdown .dropdown-toggle:hover:not(:disabled) .text-primary,
+.store-dropdown .dropdown-toggle:focus-visible:not(:disabled) .text-primary,
+.store-dropdown .dropdown-toggle:active:not(:disabled) .text-primary,
+.store-dropdown .dropdown-toggle:hover:not(:disabled) .text-secondary,
+.store-dropdown .dropdown-toggle:focus-visible:not(:disabled) .text-secondary,
+.store-dropdown .dropdown-toggle:active:not(:disabled) .text-secondary,
+.store-dropdown .dropdown-toggle:hover:not(:disabled) svg,
+.store-dropdown .dropdown-toggle:focus-visible:not(:disabled) svg,
+.store-dropdown .dropdown-toggle:active:not(:disabled) svg {
+    color: #ffffff !important;
 }
 
 .sm-active-store-btn:disabled {
@@ -179,6 +241,7 @@
     align-items: center;
     justify-content: center;
     font-size: 14px;
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 }
 
 .sm-active-store-copy {
@@ -196,6 +259,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 0.16s ease;
 }
 
 .sm-active-store-sub {
@@ -206,6 +270,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 0.16s ease;
 }
 
 .sm-active-store-right {
@@ -288,8 +353,14 @@
     transition: background-color 0.14s ease;
 }
 
-.sm-active-store-option:hover:not(:disabled) {
+.sm-active-store-option:hover:not(:disabled),
+.sm-active-store-option:focus-visible:not(:disabled) {
     background-color: #f8fafc !important;
+}
+
+.sm-active-store-option:active:not(:disabled) .sm-active-store-option-title,
+.sm-active-store-option:active:not(:disabled) .sm-active-store-option-branch {
+    color: #ffffff !important;
 }
 
 .sm-active-store-option.is-active {

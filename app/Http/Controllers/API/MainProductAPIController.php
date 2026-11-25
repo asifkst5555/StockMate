@@ -176,36 +176,52 @@ class MainProductAPIController extends AppBaseController
     {
         try {
             DB::beginTransaction();
-            $products = Product::where('main_product_id', $id)->get();
+            $mainProduct = MainProduct::whereKey($id)->firstOrFail();
+            $products = Product::where('main_product_id', $mainProduct->id)->get();
 
+            $linkedItemModels = [
+                PurchaseItem::class,
+                SaleItem::class,
+                \App\Models\PurchaseReturnItem::class,
+                \App\Models\SaleReturnItem::class,
+                \App\Models\AdjustmentItem::class,
+                \App\Models\TransferItem::class,
+                \App\Models\QuotationItem::class,
+                \App\Models\HoldItem::class,
+                \App\Models\StockMovement::class,
+            ];
+
+            // Pre-check ALL variations before deleting any child product or barcode file
             foreach ($products as $product) {
+                $hasLinkedRecords = canDelete($linkedItemModels, 'product_id', $product->id);
+                $hasActiveStock = \App\Models\ManageStock::where('product_id', $product->id)
+                    ->where('quantity', '>', 0)
+                    ->exists();
 
-                $purchaseItemModels = [
-                    PurchaseItem::class,
-                ];
-                $saleItemModels = [
-                    SaleItem::class,
-                ];
+                if ($hasLinkedRecords || $hasActiveStock) {
+                    DB::rollBack();
 
-                $purchaseResult = canDelete($purchaseItemModels, 'product_id', $product->id);
-                $saleResult = canDelete($saleItemModels, 'product_id', $product->id);
-
-                if ($purchaseResult || $saleResult) {
                     return $this->sendError(__('messages.error.product_cant_deleted'));
                 }
+            }
 
+            foreach ($products as $product) {
                 if (File::exists(Storage::path('product_barcode/barcode-PR_' . $product->id . '.png'))) {
                     File::delete(Storage::path('product_barcode/barcode-PR_' . $product->id . '.png'));
                 }
                 $product->delete();
             }
 
-            VariationProduct::where('main_product_id', $id)->delete();
+            VariationProduct::where('main_product_id', $mainProduct->id)->delete();
 
-            $this->mainProductRepository->delete($id);
+            $this->mainProductRepository->delete($mainProduct->id);
             DB::commit();
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            DB::rollBack();
+            throw $e;
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError($e->getMessage());
         }
 

@@ -13,7 +13,7 @@ import { calculateCartTotalAmount, calculateCartTotalTaxAmount, } from '../../sh
 import ModelFooter from '../../shared/components/modelFooter';
 import ProductSearch from '../../shared/components/product-cart/search/ProductSearch';
 import { addToast } from '../../store/action/toastAction';
-import { saleStatusOptions, toastType } from '../../constants';
+import { saleReturnStatusOptions, toastType } from '../../constants';
 import ReactDatePicker from '../../shared/datepicker/ReactDatePicker';
 import ProductMainCalculation from '../sales/ProductMainCalculation';
 import ReactSelect from '../../shared/select/reactSelect';
@@ -112,9 +112,20 @@ const PurchaseReturnForm = ( props ) => {
     const handleValidation = () => {
         let errorss = {};
         let isValid = false;
-        const hasValidQuantity = updateProducts.some(
-            (product) => product.quantity > 0
+        const hasInvalidQuantity = updateProducts.some(
+            (product) =>
+                !Number.isFinite(Number(product.quantity)) ||
+                Number(product.quantity) < 0
         );
+        const hasValidQuantity = updateProducts.some(
+            (product) => Number(product.quantity) > 0
+        );
+        const selectedStatus = Number(
+            purchaseValue.status_id?.value ?? purchaseValue.status_id
+        );
+        const taxRate = Number(purchaseValue.tax_rate || 0);
+        const discountVal = Number(purchaseValue.discount || 0);
+        const shippingVal = Number(purchaseValue.shipping || 0);
 
         if ( !purchaseValue.date ) {
             errorss[ 'date' ] = getFormattedMessage( 'globally.date.validate.label' );
@@ -122,17 +133,23 @@ const PurchaseReturnForm = ( props ) => {
             errorss[ 'warehouse_id' ] = getFormattedMessage( 'product.input.warehouse.validate.label' )
         } else if ( !purchaseValue.supplier_id ) {
             errorss[ 'supplier_id' ] = getFormattedMessage( 'purchase.select.supplier.validate.label' )
-        } else if ( !hasValidQuantity ) {
-            dispatch( addToast( {
-                text: getFormattedMessage( 'globally.product-quantity.validate.message' ),
-                type: toastType.ERROR
-            } ) )
         } else if ( updateProducts.length < 1 ) {
             dispatch( addToast( {
                 text: getFormattedMessage( 'purchase.product-list.validate.message' ),
                 type: toastType.ERROR
             } ) )
-        } else if ( !purchaseValue.status_id ) {
+        } else if ( hasInvalidQuantity || !hasValidQuantity ) {
+            dispatch( addToast( {
+                text: getFormattedMessage( 'globally.product-quantity.validate.message' ),
+                type: toastType.ERROR
+            } ) )
+        } else if ( !Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100 ) {
+            errorss[ 'orderTax' ] = getFormattedMessage( 'globally.tax-length.validate.label' );
+        } else if ( !Number.isFinite(discountVal) || discountVal < 0 ) {
+            errorss[ 'discount' ] = getFormattedMessage( 'globally.discount-length.validate.label' );
+        } else if ( !Number.isFinite(shippingVal) || shippingVal < 0 ) {
+            errorss[ 'shipping' ] = getFormattedMessage( 'globally.require-input.validate.label' );
+        } else if ( !purchaseValue.status_id || ( selectedStatus !== 1 && selectedStatus !== 2 ) ) {
             errorss[ 'status_id' ] = getFormattedMessage( "globally.status.validate.label" )
         } else {
             isValid = true;
@@ -205,7 +222,7 @@ const PurchaseReturnForm = ( props ) => {
         setNewPurchaseUnit( item );
     };
 
-    const statusFilterOptions = getFormattedOptions( saleStatusOptions )
+    const statusFilterOptions = getFormattedOptions( saleReturnStatusOptions )
     const statusDefaultValue = statusFilterOptions.map( ( option ) => {
         return {
             value: option.id,
@@ -213,23 +230,35 @@ const PurchaseReturnForm = ( props ) => {
         }
     } )
 
+    const selectedWarehouseId =
+        purchaseValue?.warehouse_id?.value ?? purchaseValue?.warehouse_id;
+    const resolvedWarehouseName =
+        purchaseValue?.warehouse_id?.label ||
+        warehouses?.find(
+            ( warehouse ) => Number( warehouse.id ) === Number( selectedWarehouseId )
+        )?.attributes?.name ||
+        '';
+
     const prepareData = ( prepareData ) => {
+        const activeReturnItems = updateProducts.filter(
+            ( item ) => Number( item.quantity ) > 0
+        );
         const formValue = {
             date: moment( prepareData.date ).locale('en').toDate(),
-            warehouse_id: prepareData.warehouse_id.value ? prepareData.warehouse_id.value : prepareData.warehouse_id,
-            supplier_id: prepareData.supplier_id.value ? prepareData.supplier_id.value : prepareData.supplier_id,
+            warehouse_id: prepareData.warehouse_id?.value ? prepareData.warehouse_id.value : prepareData.warehouse_id,
+            supplier_id: prepareData.supplier_id?.value ? prepareData.supplier_id.value : prepareData.supplier_id,
             discount: prepareData.discount,
             tax_rate: prepareData.tax_rate,
-            tax_amount: calculateCartTotalTaxAmount( updateProducts, purchaseValue ),
-            purchase_return_items: updateProducts,
+            tax_amount: calculateCartTotalTaxAmount( activeReturnItems, purchaseValue ),
+            purchase_return_items: activeReturnItems,
             shipping: prepareData.shipping,
-            grand_total: calculateCartTotalAmount( updateProducts, purchaseValue ),
+            grand_total: calculateCartTotalAmount( activeReturnItems, purchaseValue ),
             received_amount: '',
             paid_amount: '',
             payment_type: null,
             notes: prepareData.notes,
             reference_code: '',
-            status: prepareData.status_id.value ? prepareData.status_id.value : prepareData.status_id,
+            status: prepareData.status_id?.value ?? prepareData.status_id,
             payment_status: 2,
             purchase_id: prepareData.purchase_id ? prepareData.purchase_id : '',
         }
@@ -320,7 +349,7 @@ const PurchaseReturnForm = ( props ) => {
                             </thead>
                             <tbody>
                                 {updateProducts && updateProducts.map( ( singleProduct, index ) => {
-                                    return <PurchaseReturnTable singleProduct={singleProduct} index={index}
+                                    return <PurchaseReturnTable key={singleProduct.id ?? index} singleProduct={singleProduct} index={index}
                                         updateQty={updatedQty} updateProducts={updateProducts}
                                         updateCost={updateCost} updateDiscount={updateDiscount}
                                         updateSubTotal={updateSubTotal}
@@ -328,6 +357,8 @@ const PurchaseReturnForm = ( props ) => {
                                         setUpdateProducts={setUpdateProducts}
                                         updatePurchaseUnit={updatePurchaseUnit}
                                         purchaseItem={singlePurchase && singlePurchase.purchase_return_items}
+                                        warehouseName={resolvedWarehouseName}
+                                        isPurchaseReturn={true}
                                     />
                                 } )}
                                 {!updateProducts.length && <tr>

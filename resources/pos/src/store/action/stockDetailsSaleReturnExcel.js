@@ -1,3 +1,4 @@
+import { downloadProtectedFile } from '../../shared/downloadProtectedFile';
 import {setLoading} from './loadingAction';
 import apiConfig from '../../config/apiConfig';
 import {toastType} from '../../constants';
@@ -8,8 +9,8 @@ export const stockDetailsSaleReturnExcel = (product, setIsWarehouseValue, filter
         dispatch(setLoading(true))
     }
     await apiConfig.get(`get-product-sale-return-report-excel?product_id=${product}`)
-        .then((response) => {
-            window.open(response.data.data.product_sale_return_report_url, '_blank');
+        .then(async (response) => {
+            await downloadProtectedFile(response.data.data.product_sale_return_report_url);
             setIsWarehouseValue(false);
             if (isLoading) {
                 dispatch(setLoading(false))
@@ -18,5 +19,9 @@ export const stockDetailsSaleReturnExcel = (product, setIsWarehouseValue, filter
         .catch(({response}) => {
             dispatch(addToast(
                 {text: response?.data?.message, type: toastType.ERROR}));
+
+            if (isLoading) {
+                dispatch(setLoading(false));
+            }
         });
 };

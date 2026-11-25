@@ -130,31 +130,38 @@ if (! function_exists('recordStockMovement')) {
         ?float $unitCost = null,
         ?string $note = null
     ): void {
-        if (! Schema::hasTable('stock_movements')) {
+        static $hasStockMovementsTable = null;
+        if ($hasStockMovementsTable === null) {
+            $hasStockMovementsTable = Schema::hasTable('stock_movements');
+        }
+        if (! $hasStockMovementsTable) {
             return;
         }
 
-        \App\Models\StockMovement::create([
-            'tenant_id' => Auth::user()?->tenant_id,
-            'warehouse_id' => $warehouseID,
-            'product_id' => $productID,
-            'type' => $type,
-            'quantity_change' => $quantityChange,
-            'quantity_before' => $quantityBefore,
-            'quantity_after' => $quantityAfter,
-            'unit_cost' => $unitCost,
-            'reference_type' => $referenceType,
-            'reference_id' => $referenceId,
-            'note' => $note,
-            'user_id' => Auth::id(),
-        ]);
+        app(\App\Services\StockMovementService::class)->recordMovement(
+            $warehouseID,
+            $productID,
+            $type,
+            $quantityChange,
+            $quantityBefore,
+            $quantityAfter,
+            $referenceType,
+            $referenceId,
+            $unitCost,
+            $note
+        );
     }
 }
 
 if (! function_exists('manageStock')) {
     /**
-     * @param $request
-     * @return mixed
+     * Atomically mutate warehouse stock and record its ledger movement.
+     * Never silently clamps negative stock to zero.
+     *
+     * @param  int|string  $warehouseID
+     * @param  int|string  $productID
+     * @param  float|int  $qty
+     * @return \App\Models\ManageStock|null
      */
     function manageStock(
         $warehouseID,
@@ -166,56 +173,16 @@ if (! function_exists('manageStock')) {
         ?float $unitCost = null,
         ?string $note = null
     ) {
-        $product = ManageStock::whereWarehouseId($warehouseID)
-            ->whereProductId($productID)
-            ->lockForUpdate()
-            ->first();
-
-        if ($product) {
-            $beforeQty = (float) $product->quantity;
-            $totalQuantity = $beforeQty + (float) $qty;
-
-            if ($totalQuantity < 0) {
-                $totalQuantity = 0;
-            }
-            $product->update([
-                'quantity' => $totalQuantity,
-            ]);
-
-            recordStockMovement(
-                (int) $warehouseID,
-                (int) $productID,
-                $type,
-                (float) $qty,
-                $beforeQty,
-                $totalQuantity,
-                $referenceType,
-                $referenceId,
-                $unitCost,
-                $note
-            );
-        } else {
-            $initialQty = (float) $qty < 0 ? 0.0 : (float) $qty;
-
-            ManageStock::create([
-                'warehouse_id' => $warehouseID,
-                'product_id' => $productID,
-                'quantity' => $initialQty,
-            ]);
-
-            recordStockMovement(
-                (int) $warehouseID,
-                (int) $productID,
-                $type,
-                $initialQty,
-                0.0,
-                $initialQty,
-                $referenceType,
-                $referenceId,
-                $unitCost,
-                $note
-            );
-        }
+        return app(\App\Services\StockMovementService::class)->applyDelta(
+            (int) $warehouseID,
+            (int) $productID,
+            (float) $qty,
+            $type,
+            $referenceType,
+            $referenceId,
+            $unitCost,
+            $note
+        );
     }
 }
 
@@ -353,6 +320,10 @@ function getPayPalSupportedCurrencies()
 if (!function_exists('getPlanFeature')) {
     function getPlanFeature($plan): array
     {
+        if (empty($plan) || empty($plan->planFeature)) {
+            return [];
+        }
+
         $features = $plan->planFeature->getFillable();
         $planFeatures = [];
         foreach ($features as $feature) {

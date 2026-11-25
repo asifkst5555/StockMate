@@ -20,6 +20,10 @@ class UpdateQuotationRequest extends FormRequest
      */
     public function rules(): array
     {
-        return Quotation::$rules;
+        return \App\Rules\TenantExists::scopeRules(
+            Quotation::$rules,
+            ['customer_id' => 'customers', 'warehouse_id' => 'warehouses'],
+            ['quotation_items.*.product_id' => 'products']
+        );
     }
 }

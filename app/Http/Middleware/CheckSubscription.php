@@ -13,23 +13,36 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CheckSubscription
 {
-    // Define patterns that always require subscription check
-    protected array $alwaysCheckRoutes = [
-        'api/change-status/*',
-        'api/users/status/*',
-        'api/sales-return/paid/*',
-        'api/taxes/status-change/*',
+    /**
+     * Explicit, minimal GET allowlist for expired/missing subscriptions so the SPA
+     * can render account context, language, and subscription renewal without redirect loops.
+     * All business data GET and all write endpoints require an active unexpired subscription.
+     */
+    protected array $expiredAllowedGetRoutes = [
+        'api/config',
+        'api/permissions',
+        'api/front-setting',
+        'api/edit-profile',
+        'api/languages',
+        'api/languages/*',
     ];
 
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->isMethod('GET') && !$this->matchesProtectedRoute($request)) {
+        $user = Auth::user();
+
+        if (! $user) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        if ($user->hasRole(Role::SUPER_ADMIN)) {
             return $next($request);
         }
 
-        $user = Auth::user();
-
-        if ($user->hasRole(Role::SUPER_ADMIN)) {
+        if ($request->isMethod('GET') && $this->matchesAllowedExpiredRoute($request)) {
             return $next($request);
         }
 
@@ -54,14 +67,15 @@ class CheckSubscription
     {
         $activeSubscription = Subscription::where('user_id', $userId)
             ->where('status', Subscription::ACTIVE)
+            ->where('end_date', '>=', now())
             ->first();
 
-        return $activeSubscription && $activeSubscription->end_date >= now();
+        return ! empty($activeSubscription);
     }
 
-    private function matchesProtectedRoute(Request $request): bool
+    private function matchesAllowedExpiredRoute(Request $request): bool
     {
-        foreach ($this->alwaysCheckRoutes as $pattern) {
+        foreach ($this->expiredAllowedGetRoutes as $pattern) {
             if (Str::is($pattern, $request->path())) {
                 return true;
             }

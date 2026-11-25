@@ -13,6 +13,8 @@ import {
 import { addToast } from "../../../store/action/toastAction";
 import { toastType } from "../../../constants";
 import productImage from "../../../assets/images/brand_logo.png";
+import apiConfig from "../../../config/apiConfig";
+import { prepareCartArray } from "../../shared/PrepareCartArray";
 
 const ProductSearchbar = (props) => {
     const {
@@ -30,14 +32,18 @@ const ProductSearchbar = (props) => {
     const [keyDown, setKeyDown] = useState(false);
     const dispatch = useDispatch();
     const clickAudioRef = useRef(null);
+    const scanRequestIdRef = useRef(0);
+    const inFlightBarcodeRef = useRef(null);
+
     const filterProduct = (settings?.attributes?.show_pos_stock_product === 'true'
         ? posAllProducts
-        : posAllProducts.filter((item) => item?.attributes?.stock?.quantity > 0)
+        : posAllProducts.filter((item) => (item?.attributes?.stock?.quantity ?? 0) > 0)
         ).map((item) => ({
             name: item.attributes.name,
             code: item.attributes.code,
+            product_code: item.attributes.product_code,
             id: item.id,
-            stock: item.attributes?.stock?.quantity,
+            stock: item.attributes?.stock?.quantity ?? 0,
             unit: item?.attributes?.product_unit_name?.name,
             image: item.attributes?.images?.imageUrls?.[0],
         }));
@@ -67,162 +73,214 @@ const ProductSearchbar = (props) => {
         ) {
             const html = searchBar.firstChild.firstChild.lastChild;
             html.style.display = "none";
-        } else {
-            console.warn("Could not hide search result — element not found");
         }
     };
+
+    const playClickAudio = () => {
+        if (
+            settings?.attributes?.enable_pos_click_audio === "true" &&
+            clickAudioRef.current
+        ) {
+            clickAudioRef.current.play().catch((e) => {
+                console.warn("Audio play failed:", e);
+            });
+        }
+    };
+
+    const addMatchedProductToCart = (product) => {
+        const availableStock = Number(product?.attributes?.stock?.quantity ?? 0);
+        if (availableStock <= 0) {
+            dispatch(
+                addToast({
+                    text: getFormattedMessage(
+                        "pos.this.product.out.of.stock.message"
+                    ),
+                    type: toastType.ERROR,
+                })
+            );
+            setSearchString("");
+            removeSearchClass();
+            return;
+        }
+
+        const preparedList = prepareCartArray([product]);
+        const newProduct = preparedList[0];
+        if (!newProduct) {
+            return;
+        }
+
+        playClickAudio();
+        removeSearchClass();
+        setSearchString("");
+
+        const existingItem = updateProducts.find(
+            (item) => item.id === product.id || item.code === product.attributes.code
+        );
+
+        if (existingItem) {
+            if (existingItem.quantity >= availableStock) {
+                dispatch(
+                    addToast({
+                        text: getFormattedMessage(
+                            "pos.quantity.exceeds.quantity.available.in.stock.message"
+                        ),
+                        type: toastType.ERROR,
+                    })
+                );
+            } else {
+                setUpdateProducts((prev) =>
+                    prev.map((item) =>
+                        (item.id === product.id || item.code === product.attributes.code) &&
+                        availableStock > item.quantity
+                            ? { ...item, quantity: item.quantity + 1 }
+                            : item
+                    )
+                );
+                setKeyDown(false);
+            }
+        } else {
+            setUpdateProducts([
+                ...updateProducts,
+                { ...newProduct, warehouse_id: selectedOption?.value },
+            ]);
+            setKeyDown(false);
+        }
+    };
+
     const [lastScannedCode, setLastScannedCode] = useState(null);
 
     const onProductSearch = (code) => {
-        const codeSearch = posAllProducts
-            .filter(
-                (item) =>
-                    item.attributes.code === code ||
-                    item.attributes.code === code.code
-            )
-            .map((item) => item.attributes.code);
-        const nameSearch = posAllProducts
-            .filter(
-                (item) =>
-                    item.attributes.name === code ||
-                    item.attributes.name === code.name
-            )
-            .map((item) => item.attributes.name);
-        const finalArrays = customCart.map((customId) =>
-            code === customId.code ? customId.code : customId.name
+        const codeValue = typeof code === "string" ? code : code?.code;
+        const nameValue = typeof code === "string" ? code : code?.name;
+
+        const matchedProduct = posAllProducts.find(
+            (item) =>
+                item?.attributes?.code === codeValue ||
+                item?.attributes?.product_code === codeValue ||
+                item?.attributes?.name === nameValue
         );
-        const finalSearch = finalArrays.filter((finalArray) =>
-            finalArray === codeSearch[0] ? codeSearch[0] : nameSearch[0]
+
+        if (matchedProduct) {
+            if (matchedProduct.attributes.code === codeValue) {
+                posSearchCodeProduct(matchedProduct.attributes.code);
+            } else if (matchedProduct.attributes.name === nameValue) {
+                posSearchNameProduct(matchedProduct.attributes.name);
+            }
+            addMatchedProductToCart(matchedProduct);
+        }
+    };
+
+    const handleExactBarcodeScan = async (rawBarcode) => {
+        const barcode = (rawBarcode || "").trim();
+        if (!barcode || inFlightBarcodeRef.current === barcode) {
+            return;
+        }
+
+        // Cancel any pending Redux fallback scan so an async posAllProducts update cannot double-add
+        setLastScannedCode(null);
+
+        // Fast path: check exact code or product_code in currently loaded products
+        const localMatch = posAllProducts.find(
+            (item) =>
+                item?.attributes?.code === barcode ||
+                item?.attributes?.product_code === barcode
         );
-        const singleProduct = posAllProducts
-            .filter(
-                (product) =>
-                    product.attributes.code === code ||
-                    product.attributes.name === code ||
-                    product.attributes.code === code.code ||
-                    product.attributes.name === code.name
-            )
-            .map((product) => product.attributes?.stock?.quantity);
-        const filterQty = updateProducts
-            .filter(
-                (item) =>
-                    item.code === code ||
-                    item.name === code ||
-                    item.code === code.code ||
-                    item.name === code.name
-            )
-            .map((qty) => qty?.quantity)[0];
-        if (finalSearch[0]) {
-            if (codeSearch[0] === code) {
-                posSearchCodeProduct(codeSearch[0]);
+        if (localMatch) {
+            scanRequestIdRef.current += 1;
+            inFlightBarcodeRef.current = null;
+            addMatchedProductToCart(localMatch);
+            return;
+        }
+
+        // Exact server lookup across full tenant catalog (handles >30 products)
+        const requestId = ++scanRequestIdRef.current;
+        inFlightBarcodeRef.current = barcode;
+        try {
+            const params = new URLSearchParams({ barcode });
+            if (selectedOption?.value) {
+                params.append("warehouse_id", selectedOption.value);
+            }
+            const response = await apiConfig.get(`products/by-barcode?${params.toString()}`);
+
+            // Discard stale out-of-order response if a newer scan superseded this request
+            if (requestId !== scanRequestIdRef.current) {
+                return;
+            }
+
+            const product = response?.data?.data;
+            if (product) {
+                addMatchedProductToCart(product);
             } else {
-                posSearchNameProduct(nameSearch[0]);
+                dispatch(
+                    addToast({
+                        text: getFormattedMessage("no.results.found.message") + `: ${barcode}`,
+                        type: toastType.ERROR,
+                    })
+                );
+                setSearchString("");
             }
-            removeSearchClass();
-            setSearchString("");
-            if (settings?.attributes?.enable_pos_click_audio === "true" &&
-                clickAudioRef.current
-            ) {clickAudioRef.current.play().catch((e) => {
-                    console.warn("Audio play failed:", e);
-                });
+        } catch (error) {
+            if (requestId !== scanRequestIdRef.current) {
+                return;
             }
-            let pushArray = [...customCart];
-            let newProduct = pushArray.find(
-                (element) => element.code === codeSearch[0] || element.name === nameSearch[0]
+            dispatch(
+                addToast({
+                    text:
+                        error?.response?.data?.message ||
+                        `${getFormattedMessage("no.results.found.message")}: ${barcode}`,
+                    type: toastType.ERROR,
+                })
             );
-            if (
-                updateProducts.filter(
-                    (item) =>
-                        item.code === code ||
-                        item.name === code ||
-                        item.code === code.code ||
-                        item.name === code.name
-                ).length > 0
-            ) {
-                if (filterQty >= singleProduct[0]) {
-                    dispatch(
-                        addToast({
-                            text: getFormattedMessage(
-                                "pos.quantity.exceeds.quantity.available.in.stock.message"
-                            ),
-                            type: toastType.ERROR,
-                        })
-                    );
-                } else {
-                    setUpdateProducts((updateProducts) =>
-                        updateProducts.map((item) =>
-                            (item.code === code ||
-                                item.name === code ||
-                                item.code === code.code || 
-                                item.name === code.name
-                            ) &&
-                            singleProduct[0] > item.quantity
-                                ? { ...item, quantity: item.quantity + 1 }
-                                : item
-                        )
-                    );
-                    setKeyDown(false);
-                }
-            } else {
-                setUpdateProducts([
-                    ...updateProducts,
-                    { ...newProduct, warehouse_id: selectedOption?.value },
-                ]);
-                setKeyDown(false);
-                removeSearchClass(true);
+            setSearchString("");
+        } finally {
+            if (requestId === scanRequestIdRef.current) {
+                inFlightBarcodeRef.current = null;
+                inputFocus();
             }
         }
     };
 
-    let scanProductBarCode = false;
     const handleOnSelect = (result) => {
-        if (keyDown === false && scanProductBarCode === true) {
-            onProductSearch(result);
-            scanProductBarCode = false;
-        }
-
-        if (searchString.trim()?.length !== 0) {
+        if (result) {
+            setLastScannedCode(null);
+            scanRequestIdRef.current += 1;
+            inFlightBarcodeRef.current = null;
             onProductSearch(result);
         }
     };
 
     const handleOnSearch = (string) => {
-        if (string.trim() !== "") {
-            setSearchString(string);
+        setSearchString(string);
+        const trimmed = string.trim();
+        if (trimmed !== "") {
             const filteredProducts = settings?.attributes?.show_pos_stock_product === 'true'
                 ? posAllProducts
-                : posAllProducts.filter(item => item.attributes.stock.quantity > 0);
+                : posAllProducts.filter((item) => (item?.attributes?.stock?.quantity ?? 0) > 0);
 
-            const codeSearch = filteredProducts.filter(
-                item => item.attributes.code === string || item.attributes.name === string
+            const exactMatches = filteredProducts.filter(
+                (item) =>
+                    item?.attributes?.code === trimmed ||
+                    item?.attributes?.product_code === trimmed ||
+                    item?.attributes?.name === trimmed
             );
-            if (codeSearch.length > 0) {
-                if (codeSearch[0].attributes?.stock?.quantity > 0) {
-                    if (codeSearch?.length === 1) {
-                        scanProductBarCode = true;
-                        const data = {
-                            name: codeSearch[0]?.attributes?.name,
-                            code: codeSearch[0]?.attributes?.code,
-                            id: codeSearch[0]?.id,
-                        };
-                        handleOnSelect(data);
-                        setSearchString("");
-                    }
-                } else {
-                    dispatch(
-                        addToast({
-                            text: getFormattedMessage(
-                                "pos.this.product.out.of.stock.message"
-                            ),
-                            type: toastType.ERROR,
-                        })
-                    );
-                    setSearchString("");
-                }
-            } else {
-                onSearchProduct(string);
-                setLastScannedCode(string);
+            if (exactMatches.length === 1) {
+                setLastScannedCode(null);
+                scanRequestIdRef.current += 1;
+                inFlightBarcodeRef.current = null;
+                addMatchedProductToCart(exactMatches[0]);
+            } else if (exactMatches.length === 0) {
+                onSearchProduct(trimmed);
+                setLastScannedCode(trimmed);
             }
+        } else {
+            setLastScannedCode(null);
+        }
+    };
+
+    const handleKeyDown = (event) => {
+        if ((event.key === "Enter" || event.key === "Tab") && searchString.trim() !== "") {
+            event.preventDefault();
+            handleExactBarcodeScan(searchString);
         }
     };
 
@@ -237,7 +295,9 @@ const ProductSearchbar = (props) => {
         let searchInput = document.querySelector(
             'input[data-test="search-input"]'
         );
-        searchInput.focus();
+        if (searchInput) {
+            searchInput.focus();
+        }
     };
 
     useEffect(() => {
@@ -256,7 +316,10 @@ const ProductSearchbar = (props) => {
     }, []);
 
     return (
-        <Col className="position-relative my-3 search-bar col-xxl-8 col-lg-12 col-12">
+        <Col
+            className="position-relative my-3 search-bar col-xxl-8 col-lg-12 col-12"
+            onKeyDown={handleKeyDown}
+        >
             <audio ref={clickAudioRef} src={settings?.attributes?.click_audio} preload="auto" />
             <ReactSearchAutocomplete
                 placeholder={placeholderText("pos-globally.search.field.label")}
@@ -269,7 +332,7 @@ const ProductSearchbar = (props) => {
                     location: 0,
                     distance: 100,
                     minMatchCharLength: 2,
-                    keys: ["name", "code"],
+                    keys: ["name", "code", "product_code"],
                 }}
                 resultStringKeyName="code"
                 onSelect={(data) => {

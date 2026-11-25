@@ -20,6 +20,10 @@ class UpdateHoldRequest extends FormRequest
      */
     public function rules(): array
     {
-        return Hold::$rules;
+        return \App\Rules\TenantExists::scopeRules(
+            Hold::$rules,
+            ['customer_id' => 'customers', 'warehouse_id' => 'warehouses'],
+            ['hold_items.*.product_id' => 'products']
+        );
     }
 }
